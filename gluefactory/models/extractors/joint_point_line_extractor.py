@@ -10,6 +10,8 @@ from kornia.geometry.transform import warp_perspective
 from omegaconf import OmegaConf
 
 from gluefactory.datasets.homographies_deeplsd import sample_homography
+from gluefactory.geometry.homography import warp_points_torch
+from gluefactory.geometry.kp_losses import soft_argmax_only_loss
 from gluefactory.models import get_model
 from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_cfgs
 from gluefactory.models.base_model import BaseModel
@@ -24,8 +26,6 @@ from gluefactory.models.utils.metrics_points import (
 )
 from gluefactory.settings import DATA_PATH
 from gluefactory.utils.misc import change_dict_key, sync_and_time
-from gluefactory.geometry.homography import warp_points_torch
-from gluefactory.geometry.kp_losses import soft_argmax_only_loss
 
 # Parameters for calculating point metrics in validation loss
 default_H_params = {
@@ -69,11 +69,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
         "training": {  # training settings
-            "two_view": False, # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
+            "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "aliked_pretrained": True,  # use pretrained ALIKED weights in backbone encoder
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
-            "train_descriptors": { # for train decriptors in one-view: generate gt descriptrs, in two-view: use caps loss
+            "train_descriptors": {  # for train decriptors in one-view: generate gt descriptrs, in two-view: use caps loss
                 "do": True,  # if train is True, initialize ALIKED Light model form OTF Descriptor GT
                 "gt_aliked_model": "aliked-n32",
             },  # if train is True, initialize ALIKED Light model form OTF Descriptor GT
@@ -220,7 +220,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.load_pretrained_aliked_elements()
 
         # Initialize Lightweight ALIKED model to perform on-the-fly ground-truth generation for descriptors if training in one-view setting
-        if conf.training.do and conf.training.train_descriptors.do and not conf.training.two_view:
+        if (
+            conf.training.do
+            and conf.training.train_descriptors.do
+            and not conf.training.two_view
+        ):
             logger.warning("Load ALiked Lightweight model for descriptor training...")
             aliked_gt_cfg = {
                 "model_name": self.conf.training.train_descriptors.gt_aliked_model,
@@ -272,7 +276,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # Load line extractor and import line metrics if line detection is used
         if self.conf.line_detection.do:
-
             self.line_extractor = LineExtractor(
                 self.conf.line_detection.conf,
             )
@@ -442,7 +445,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
-        if self.conf.line_detection.do and not self.training: # TODO: we might need to do line detect during training for an end to end train setting
+        if (
+            self.conf.line_detection.do and not self.training
+        ):  # TODO: we might need to do line detect during training for an end to end train setting
             if self.conf.timeit:
                 start_lines = sync_and_time()
             lines = []
@@ -572,34 +577,50 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Combine the parts to get the total loss
         loss = target * pos_part + (1 - target) * neg_part
         return loss
-    
+
     def warp_data(self, df, angle, H, ps: list):
         h, w = df.shape[1:3]
         ps = tuple(ps)
 
         # Warp the closest point on a line
-        pix_loc = torch.stack(
-            torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij"), dim=-1
-        ).to(df.device).float()
+        pix_loc = (
+            torch.stack(
+                torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij"), dim=-1
+            )
+            .to(df.device)
+            .float()
+        )
 
         warped_dfs = []
 
         for i in range(df.shape[0]):
             with torch.no_grad():
-                offset = df[i][:,:,None] * torch.stack([torch.sin(angle[i]), torch.cos(angle[i])], dim=-1)
+                offset = df[i][:, :, None] * torch.stack(
+                    [torch.sin(angle[i]), torch.cos(angle[i])], dim=-1
+                )
             closest = pix_loc + offset
-            warped_closest = warp_points_torch(closest.reshape(-1, 2), H, inverse=False).reshape(h, w, 2)
-            warped_pix_loc = warp_points_torch(pix_loc.reshape(-1, 2), H, inverse=False).reshape(h, w, 2)
-            
+            warped_closest = warp_points_torch(
+                closest.reshape(-1, 2), H, inverse=False
+            ).reshape(h, w, 2)
+            warped_pix_loc = warp_points_torch(
+                pix_loc.reshape(-1, 2), H, inverse=False
+            ).reshape(h, w, 2)
+
             offset_norm = torch.linalg.norm(offset, dim=-1)
             zero_offset = offset_norm < 1e-3
             offset_norm[zero_offset] = 1
-            scaling = torch.linalg.norm(warped_closest - warped_pix_loc, dim=-1) / offset_norm
+            scaling = (
+                torch.linalg.norm(warped_closest - warped_pix_loc, dim=-1) / offset_norm
+            )
             scaling[zero_offset] = 0
 
             # Warp the DF
-            warped_df = warp_perspective(df[i][None, None], H, ps, mode="bilinear").squeeze()
-            warped_scaling = warp_perspective(scaling[None, None], H, ps, mode="bilinear").squeeze()
+            warped_df = warp_perspective(
+                df[i][None, None], H, ps, mode="bilinear"
+            ).squeeze()
+            warped_scaling = warp_perspective(
+                scaling[None, None], H, ps, mode="bilinear"
+            ).squeeze()
             warped_df *= warped_scaling
 
             warped_dfs.append(warped_df)
@@ -624,7 +645,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.two_view:
             for k, v in pred.items():
                 if k.endswith("0"):
-                    prediction_dict[k[:-1]] = v 
+                    prediction_dict[k[:-1]] = v
         else:
             prediction_dict = pred
 
@@ -649,26 +670,39 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if not self.conf.training.two_view:
                 # in case of one view: generate gt descriptors to directly supervise using l1 loss
                 data = {
-                **data,
-                **self.get_groundtruth_descriptors(
-                    {"keypoints": prediction_dict["keypoints_raw"], "image": gt_dict["image"]}
-                ),
+                    **data,
+                    **self.get_groundtruth_descriptors(
+                        {
+                            "keypoints": prediction_dict["keypoints_raw"],
+                            "image": gt_dict["image"],
+                        }
+                    ),
                 }
                 keypoint_descriptor_loss = F.l1_loss(
-                    prediction_dict["descriptors"], gt_dict["aliked_descriptors"], reduction="none"
+                    prediction_dict["descriptors"],
+                    gt_dict["aliked_descriptors"],
+                    reduction="none",
                 ).mean(dim=(1, 2))
             else:
                 # in case of two-view: use the caps window loss for descriptors
-                matches = compute_matches(prediction_dict["keypoints"], pred["keypoints1"], H)
+                matches = compute_matches(
+                    prediction_dict["keypoints"], pred["keypoints1"], H
+                )
                 keypoint_descriptor_loss = 0
                 for b_idx in range(len(matches)):
-                    keypoint_descriptor_loss += sparse_nre_loss(prediction_dict["descriptors"][b_idx],pred["descriptors1"][b_idx], matches[b_idx])
+                    keypoint_descriptor_loss += sparse_nre_loss(
+                        prediction_dict["descriptors"][b_idx],
+                        pred["descriptors1"][b_idx],
+                        matches[b_idx],
+                    )
                 keypoint_descriptor_loss /= len(matches)
             losses["descriptors"] = keypoint_descriptor_loss.unsqueeze(0)
 
         # use angular loss for anglefield, if use of af is activated
         if self.conf.use_line_anglefield:
-            af_diff = gt_dict["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
+            af_diff = (
+                gt_dict["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
+            )
             line_af_loss = (
                 torch.minimum(af_diff**2, (torch.pi - af_diff.abs()) ** 2)
                 * padding_mask
@@ -682,7 +716,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
         gt_mask = gt_dict["deeplsd_distance_field"] < self.conf.line_neighborhood
         line_df_loss = F.l1_loss(
             self.normalize_df(pred["line_distancefield0"]) * gt_mask * padding_mask,
-            self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"]) * gt_mask * padding_mask,
+            self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"])
+            * gt_mask
+            * padding_mask,
             # only supervise in line neighborhood
             reduction="none",
         ).mean(dim=(1, 2))
@@ -690,13 +726,16 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.two_view:
             # In case of two-view, add df consistency loss
             warped_df = self.warp_data(
-                df = pred["line_distancefield1"],
-                angle = data["view1"]["cache"]["deeplsd_angle_field"],
-                H = torch.linalg.inv(H),
-                ps = tuple(pred["line_distancefield0"].shape[1:])
+                df=pred["line_distancefield1"],
+                angle=data["view1"]["cache"]["deeplsd_angle_field"],
+                H=torch.linalg.inv(H),
+                ps=tuple(pred["line_distancefield0"].shape[1:]),
             )
             valid_mask = warp_perspective(
-                torch.ones_like(pred["line_distancefield0"][None], device=pred["line_distancefield0"].device),
+                torch.ones_like(
+                    pred["line_distancefield0"][None],
+                    device=pred["line_distancefield0"].device,
+                ),
                 torch.linalg.inv(H),
                 tuple(pred["line_distancefield0"].shape[1:]),
                 mode="nearest",
@@ -705,7 +744,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             # warped_df = warp_perspective(pred["line_distancefield1"][:,None,:,:],torch.linalg.inv(H), tuple(pred["line_distancefield0"].shape[1:]))
             warped_df = warped_df.squeeze(1)
             losses["line_distancefield"] += F.l1_loss(
-                self.normalize_df(pred["line_distancefield0"]) * gt_mask * padding_mask * valid_mask,
+                self.normalize_df(pred["line_distancefield0"])
+                * gt_mask
+                * padding_mask
+                * valid_mask,
                 self.normalize_df(warped_df) * gt_mask * padding_mask * valid_mask,
                 # only supervise in line neighborhood
                 reduction="none",
@@ -715,11 +757,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
         overall_loss = (
             self.conf.training.loss.loss_weights.keypoint_weight
             * losses["keypoint_and_junction_score_map"]
-            + self.conf.training.loss.loss_weights.line_df_weight * losses["line_distancefield"]
+            + self.conf.training.loss.loss_weights.line_df_weight
+            * losses["line_distancefield"]
         )
         if self.conf.use_line_anglefield:
             overall_loss += (
-                self.conf.training.loss.loss_weights.line_af_weight * losses["line_anglefield"]
+                self.conf.training.loss.loss_weights.line_af_weight
+                * losses["line_anglefield"]
             )
         if self.conf.training.train_descriptors.do:
             overall_loss += (
@@ -728,7 +772,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
 
         # soft argmax loss
-        if self.conf.training.loss.refinement_radius > 0 and self.conf.training.loss.loss_weights.softargmax_weight > 0:
+        if (
+            self.conf.training.loss.refinement_radius > 0
+            and self.conf.training.loss.loss_weights.softargmax_weight > 0
+        ):
             loc_loss = soft_argmax_only_loss(
                 pred["keypoint_and_junction_score_map0"],
                 pred["keypoint_and_junction_score_map1"],
@@ -738,8 +785,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 self.conf.training.loss.refinement_radius,
             )
             losses["loc_loss"] = loc_loss
-            overall_loss += self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
-
+            overall_loss += (
+                self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
+            )
 
         losses["total"] = overall_loss
 
@@ -915,18 +963,27 @@ class JointPointLineDetectorDescriptor(BaseModel):
         return warped_outputs, Hs
 
 
-def compute_matches(keypoints_im1: torch.Tensor, keypoints_im2: torch.Tensor, H: torch.Tensor) -> torch.Tensor:
+def compute_matches(
+    keypoints_im1: torch.Tensor, keypoints_im2: torch.Tensor, H: torch.Tensor
+) -> torch.Tensor:
     warped_points = warp_points_torch(keypoints_im2, H, inverse=True)
-    dists = torch.linalg.norm(keypoints_im1[:,:,None,:] - warped_points[:,None,:,:],axis=-1)
-    
+    dists = torch.linalg.norm(
+        keypoints_im1[:, :, None, :] - warped_points[:, None, :, :], axis=-1
+    )
+
     bs = keypoints_im1.shape[0]
     matches = []
     for b_idx in range(bs):
         matches.append(torch.stack(torch.where(dists[b_idx] < 3.0)).T)
     return matches
-    
 
-def sparse_nre_loss(descriptors1: torch.Tensor, descriptors2: torch.Tensor, matches: torch.Tensor, temperature: float=0.1):
+
+def sparse_nre_loss(
+    descriptors1: torch.Tensor,
+    descriptors2: torch.Tensor,
+    matches: torch.Tensor,
+    temperature: float = 0.1,
+):
     """
     Compute the Sparse Neural Reprojection Error (NRE) loss.
 
@@ -959,4 +1016,3 @@ def sparse_nre_loss(descriptors1: torch.Tensor, descriptors2: torch.Tensor, matc
     loss = F.cross_entropy(similarity_matrix, labels)
 
     return loss
-

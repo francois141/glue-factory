@@ -14,11 +14,11 @@ data:
         scale_selection: 'random' # random or round-robin
     load_features:
         do: True
-        check_exists: True
+        check_exists: True # check if gt files are existing for each image and filter out those for that this isn't the case
         point_gt:
             # ATTENTION: if deeplsd line ep are used as kp gt, using score heatmap is discouraged, as deeplsd does not assign scores to line ep and thus we set all to one
             load_points: False
-            use_score_heatmap: False
+            use_score_heatmap: False # Use scores instead of just set kp location to 1 in the map
             max_num_keypoints: 63  # how many gt keypoints are loaded (could be used for kp losses later on). The heatmap is generated with all kp anyway. max num is needed for batching.
             max_num_heatmapo_keypoints: -1
             use_deeplsd_lineendpoints_as_kp_gt: False  # set true to use deep-lsd line endpoints as keypoint groundtruth
@@ -35,7 +35,7 @@ model:
     name: joint_point_line_extractor
     model_name: "aliked-n16"
     line_neighborhood: 5
-    max_num_keypoints: 1500  # setting for training, for eval: -1
+    max_num_keypoints: 100  # setting for training, for eval: -1
     subpixel_refinement: True  # activate subpixel refinement in DKD
     use_line_anglefield: False   # if set to false, model will be initialized without AF branch and AF will not be output or considered in inference or training
                                 # In that case make sure the line detection does not expect AF input!
@@ -45,7 +45,7 @@ model:
         aliked_pretrained: True
         pretrain_kp_decoder: True
         train_descriptors:
-            do: True # if train is True, initialize ALIKED Light model form OTF Descriptor GT
+            do: True # if train is True, initialize ALIKED Light model for On-The-Fly Descriptor GT
             gt_aliked_model: "aliked-n32"
         loss:
             kp_loss_name: "focal_loss"

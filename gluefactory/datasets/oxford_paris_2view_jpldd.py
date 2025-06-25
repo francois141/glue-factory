@@ -55,7 +55,7 @@ def plot_predictions(pred, data):
 
     # read image
     img_0 = data["view0"]["image"][0].permute(1, 2, 0).cpu().numpy()
-    
+
     # read ground truth
     kp_0 = data["view0"]["cache"]["keypoints"][0].cpu().numpy()
     kp_heatmap0 = data["view0"]["cache"]["superpoint_heatmap"][0].cpu().numpy()
@@ -94,18 +94,15 @@ class OxfordParisTwoViewDataset(BaseDataset):
         # image search
         "data_dir": "revisitop1m_POLD2/jpg",  # the top-level directory
         "img_list": "gluefactory/datasets/oxford_paris_images.txt",
-
         # splits
         "train_size": 11500,
         "val_size": 500,
-        "rand_shuffle_seed": 0,  # or None to 
+        "rand_shuffle_seed": 0,  # or None to
         "reseed": False,
-        
         # image loading
         "grayscale": False,
         "triplet": False,
         "right_only": False,  # image0 is orig (rescaled), image1 is right
-        
         # homography
         "homography": {
             "difficulty": 0.8,
@@ -115,14 +112,12 @@ class OxfordParisTwoViewDataset(BaseDataset):
             "patch_shape": [640, 480],
             "min_convexity": 0.05,
         },
-
         # photometric augmentations
         "photometric": {
             "name": "dark",
             "p": 0.75,
             # 'difficulty': 1.0,  # currently unused
         },
-
         # groundtruth loading
         "load_features": {
             "do": False,
@@ -139,12 +134,12 @@ class OxfordParisTwoViewDataset(BaseDataset):
     def _init(self, conf):
         with open(root / self.conf.img_list, "r") as f:
             self.img_list = [file_name.strip("\n") for file_name in f.readlines()]
-        
+
         # load image names
         images = self.img_list
         if self.conf.rand_shuffle_seed is not None:
             np.random.RandomState(conf.rand_shuffle_seed).shuffle(images)
-        
+
         train_images = images[: conf.train_size]
         val_images = images[conf.train_size : conf.train_size + conf.val_size]
         self.images = {
@@ -190,23 +185,24 @@ class _Dataset(torch.utils.data.Dataset):
         for img_path in self.image_names:
 
             full_artificial_img_path = self.image_dir / img_path
-            img_folder = (
-                full_artificial_img_path.parent / full_artificial_img_path.stem
-            )
+            img_folder = full_artificial_img_path.parent / full_artificial_img_path.stem
             keypoint_file = img_folder / "keypoint_scores.npy"
             af_file = img_folder / "angle.jpg"
             df_file = img_folder / "df.jpg"
             img_file = img_folder / "base_image.jpg"
 
-
-            if keypoint_file.exists() and af_file.exists() and df_file.exists() and img_file.exists():
+            if (
+                keypoint_file.exists()
+                and af_file.exists()
+                and df_file.exists()
+                and img_file.exists()
+            ):
                 new_img_path_list.append(img_path)
             else:
                 logging.warning(f"GT files not found for {img_file}")
 
         logger.info(f"NUMBER OF IMAGES WITH GT: {len(new_img_path_list)}")
         return new_img_path_list
-
 
     def _transform_keypoints(self, features, data):
         """Transform keypoints by a homography, threshold them,
@@ -351,12 +347,18 @@ class _Dataset(torch.utils.data.Dataset):
 
             # prepare keypoint heatmap
             heatmap = np.zeros_like(data["image"][0], dtype=np.float32)
-            integer_kp_coordinates = torch.round(features["keypoints"]).to(dtype=torch.int)
-            
+            integer_kp_coordinates = torch.round(features["keypoints"]).to(
+                dtype=torch.int
+            )
+
             if self.conf.load_features.point_gt.use_score_heatmap:
-                heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = features["keypoint_scores"]
+                heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
+                    features["keypoint_scores"]
+                )
             else:
-                heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = 1.0
+                heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
+                    1.0
+                )
             heatmap = torch.from_numpy(heatmap).to(dtype=torch.float32)
 
             features["superpoint_heatmap"] = heatmap
@@ -412,8 +414,12 @@ class _Dataset(torch.utils.data.Dataset):
 
             # Add the warped features to the dictionary
             # features["deeplsd_offset_field"] = torch.from_numpy(warped_offset).to(dtype=torch.float32)
-            features["deeplsd_distance_field"] = torch.from_numpy(warped_df).to(dtype=torch.float32)
-            features["deeplsd_angle_field"] = torch.from_numpy(warped_angle).to(dtype=torch.float32)
+            features["deeplsd_distance_field"] = torch.from_numpy(warped_df).to(
+                dtype=torch.float32
+            )
+            features["deeplsd_angle_field"] = torch.from_numpy(warped_angle).to(
+                dtype=torch.float32
+            )
             # features["line_level"] = (
             #     torch.from_numpy(warped_direction_field)
             #     .to(dtype=torch.float32)
@@ -445,7 +451,9 @@ class _Dataset(torch.utils.data.Dataset):
             left_conf["difficulty"] = 0.0
 
         data0 = self._read_view(img, img_folder_path, name, left_conf, ps, left=True)
-        data1 = self._read_view(img, img_folder_path, name, self.conf.homography, ps, left=False)
+        data1 = self._read_view(
+            img, img_folder_path, name, self.conf.homography, ps, left=False
+        )
 
         H = compute_homography(data0["coords"], data1["coords"], [1, 1])
 
@@ -495,9 +503,7 @@ def visualize(args):
                 [data[f"view{i}"]["image"][0].permute(1, 2, 0) for i in range(2)]
             )
             # Visualize the DF and line level
-            images.append(
-                [data[f"view{i}"]["cache"]["df"][0] for i in range(2)]
-            )
+            images.append([data[f"view{i}"]["cache"]["df"][0] for i in range(2)])
             images.append(
                 [data[f"view{i}"]["cache"]["line_level"][0] for i in range(2)]
             )
