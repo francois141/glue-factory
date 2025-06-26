@@ -542,7 +542,7 @@ def training(rank, conf, output_dir, args):
                 if rank == 0:
                     str_losses = [f"{k} {v:.3E}" for k, v in losses.items()]
                     logger.info(
-                        "[E {} | it {}] loƒzeross {{{}}}".format(
+                        "[E {} | it {}] loss {{{}}}".format(
                             epoch, it, ", ".join(str_losses)
                         )
                     )

@@ -27,6 +27,7 @@ model:
     extractor:
         name: joint_point_line_extractor
         model_name: "aliked-n16"
+        trainable: True # needs to be set explicitly here as two-view is not trainable
         line_neighborhood: 5
         max_num_keypoints: 1000  # setting for training, for eval: -1
         subpixel_refinement: True # if activated the DKD module will apply arg-softmax refinement of keypoint positions
@@ -42,7 +43,7 @@ model:
                 use_two_view_loss: True # use sparse nre loss to train descriptors
                 gt_aliked_model: "aliked-n32"
             loss:
-                use_one_view_df_loss: True # one-view losses can be applied any time
+                use_one_view_df_loss: False # one-view losses can be applied any time
                 use_one_view_af_loss: False # af loss is only applied if af use is activated
                 use_two_view_df_loss: True # two view losses are only applied if two-view training activated
                 use_one_view_kp_loss: True # use one-view keypoint loss ex. focal, l1 etc

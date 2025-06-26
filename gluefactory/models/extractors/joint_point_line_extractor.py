@@ -112,6 +112,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "checkpoint": jpl_default_checkpoint_url,  # if given and non-null, load model checkpoint if local path load locally if standard url download it.
         "line_neighborhood": 5,  # used to normalize / denormalize line distance field
         "timeit": False,  # override timeit: False from BaseModel
+        "trainable": True,
     }
 
     # used for line detection ablation and development when we use deeplsd af/df or line endpoints instead of original net output
@@ -650,9 +651,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         prediction_dict = {}
         if self.conf.training.two_view:
-            for k, v in pred.items(): # TODO: what is this for? We basically create new entries without the 0 -> possibly to also use 1iew losses during two-view
+            for k, v in pred.items():
                 if k.endswith("0"):
                     prediction_dict[k[:-1]] = v
+                else:
+                    prediction_dict[k] = v
         else:
             prediction_dict = pred
 
@@ -705,24 +708,24 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             # best match in kp of A - for each kp projected from B to A
             matches_B_to_A = compute_matches(
-                prediction_dict["keypoints"], pred["keypoints1"], H, best_match_only=True
+                prediction_dict["keypoints"], prediction_dict["keypoints1"], H, best_match_only=True
             )
 
             # best match in kp of B - for each kp projected from A to B
             matches_A_to_B = compute_matches(
-                pred["keypoints1"], prediction_dict["keypoints"], H_inv, best_match_only=True
+                prediction_dict["keypoints1"], prediction_dict["keypoints"], H_inv, best_match_only=True
             )
 
             # returns overall mean scalar, need to repeat on batch dim for total loss.
             keypoint_descriptor_lossBA = sparse_nre_loss(
                 prediction_dict["descriptors"], # (B, N_A, Dim)
-                pred["descriptors1"], # (B, N_B, Dim)
+                prediction_dict["descriptors1"], # (B, N_B, Dim)
                 matches_B_to_A, # (M, 3)
             )
 
             # returns overall mean scalar, need to repeat on batch dim for total loss.
             keypoint_descriptor_lossAB = sparse_nre_loss(
-                pred["descriptors1"],  # (B, N_B, Dim)
+                prediction_dict["descriptors1"],  # (B, N_B, Dim)
                 prediction_dict["descriptors"],  # (B, N_A, Dim)
                 matches_A_to_B,  # (M, 3)
             )
@@ -750,7 +753,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
             line_df_loss = F.l1_loss(
-                self.normalize_df(pred["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0,
+                self.normalize_df(prediction_dict["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0,
                 self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
                 * df_gt_mask_view0
                 * padding_mask_view0,
@@ -764,48 +767,48 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
             # img1 to img0
             warped_df_1_to_0 = self.warp_data(
-                df=pred["line_distancefield1"],
+                df=prediction_dict["line_distancefield1"],
                 angle=data["view1"]["cache"]["deeplsd_angle_field"],
                 H=H_inv,
-                ps=tuple(pred["line_distancefield0"].shape[1:]),
+                ps=tuple(prediction_dict["line_distancefield"].shape[1:]),
             ).squeeze(1)
             # valid mask - warp image of ones from view1 to view0. Padding with 0 around warped part gives mask
             valid_mask_1_to_0 = warp_perspective(
                 torch.ones_like(
-                    pred["line_distancefield1"][None],
-                    device=pred["line_distancefield1"].device,
+                    prediction_dict["line_distancefield1"][None],
+                    device=prediction_dict["line_distancefield1"].device,
                 ),
                 H_inv,
-                tuple(pred["line_distancefield1"].shape[1:]),
+                tuple(prediction_dict["line_distancefield1"].shape[1:]),
                 mode="nearest",
             ).squeeze(1)
 
             loss_1to0 = F.l1_loss(
-                self.normalize_df(pred["line_distancefield0"]) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
+                self.normalize_df(prediction_dict["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
                 self.normalize_df(warped_df_1_to_0) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
                 reduction="none",
             ).mean(dim=(1, 2))
 
             # img0 to img1
             warped_df_0to1 = self.warp_data(
-                df=pred["line_distancefield0"],
-                angle=data["view0"]["cache"]["deeplsd_angle_field"],  # Note: view0 angle field
+                df=prediction_dict["line_distancefield"],
+                angle=gt_dict_view0["deeplsd_angle_field"],  # Note: view0 angle field
                 H=H,  # Note: H instead of H_inv
-                ps=tuple(pred["line_distancefield1"].shape[1:]),
+                ps=tuple(prediction_dict["line_distancefield1"].shape[1:]),
             ).squeeze(1)
             # valid mask for 0->1 warping
             valid_mask_0to1 = warp_perspective(
                 torch.ones_like(
-                    pred["line_distancefield0"][None],
-                    device=pred["line_distancefield0"].device,
+                    prediction_dict["line_distancefield"][None],
+                    device=prediction_dict["line_distancefield"].device,
                 ),
                 H,  # Note: H instead of H_inv
-                tuple(pred["line_distancefield0"].shape[1:]),
+                tuple(prediction_dict["line_distancefield"].shape[1:]),
                 mode="nearest",
             ).squeeze(1)
             # compute loss
             loss_0to1 = F.l1_loss(
-                self.normalize_df(pred["line_distancefield1"]) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
+                self.normalize_df(prediction_dict["line_distancefield1"]) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
                 self.normalize_df(warped_df_0to1) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
                 reduction="none",
             ).mean(dim=(1, 2))
@@ -822,8 +825,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
             loc_loss = soft_argmax_only_loss(
                 pred["keypoint_and_junction_score_map0"],
                 pred["keypoint_and_junction_score_map1"],
-                data["view0"]["cache"]["keypoints"],
-                data["view0"]["cache"]["keypoint_scores"] > 0,
+                gt_dict_view0["keypoints"],
+                gt_dict_view0["keypoint_scores"] > 0,
                 H,
                 self.conf.training.loss.refinement_radius,
             )
