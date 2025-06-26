@@ -7,9 +7,6 @@ artifacts.
 import argparse
 import logging
 import pickle
-import shutil
-import tarfile
-from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
@@ -17,7 +14,6 @@ import numpy as np
 import omegaconf
 import torch
 from omegaconf import OmegaConf
-from tqdm import tqdm
 
 from ..geometry.homography import (
     compute_homography,

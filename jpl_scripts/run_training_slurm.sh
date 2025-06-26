@@ -3,12 +3,12 @@
 # Run multi gpu on same node
 
 #SBATCH --time=1-00:00:00
-#SBATCH --ntasks=1
+#SBATCH --ntasks=4
 #SBATCH --nodes=1
 #SBATCH --gpus=4
 #SBATCH --gres=gpumem:23g
-#SBATCH --cpus-per-task=16
-#SBATCH --mem-per-cpu=4096
+#SBATCH --cpus-per-task=5
+#SBATCH --mem-per-cpu=6000
 #SBATCH --output=train.out
 #SBATCH --mail-type=END
 #SBATCH --mail-user=r.kreft@stud.ethz.ch

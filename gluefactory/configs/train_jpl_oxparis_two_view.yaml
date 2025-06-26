@@ -6,17 +6,17 @@ data:
     homography:
       difficulty: 0.5
       max_angle: 30
-      patch_shape: [640, 480]
+      patch_shape: [800, 800]
     photometric:
         p: 0.75
     train_size: 11000
     val_size: 1000
-    batch_size: 1  # 16 per 10Gb of GPU mem
-    num_workers: 1
+    batch_size: 32  # 16 per 10Gb of GPU mem
+    num_workers: 12
     load_features:
         do: True
         thresh: 0.0
-        max_num_keypoints: 500
+        max_num_keypoints: 1000
         force_num_keypoints: True
         point_gt:
             use_score_heatmap: True
