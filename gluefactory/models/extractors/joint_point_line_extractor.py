@@ -69,15 +69,20 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
         "training": {  # training settings
-            "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
             "do": False,  # switch to turn off other settings regarding training = "training mode"
+            "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
             "aliked_pretrained": True,  # use pretrained ALIKED weights in backbone encoder
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
-            "train_descriptors": {  # for train decriptors in one-view: generate gt descriptrs, in two-view: use caps loss
-                "do": True,  # if train is True, initialize ALIKED Light model form OTF Descriptor GT
+            "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
                 "gt_aliked_model": "aliked-n32",
-            },  # if train is True, initialize ALIKED Light model form OTF Descriptor GT
+                "use_one_view_loss": True, # In one view training can decide if train descriptors with this flag
+                "use_two_view_loss": True, # can only be used if two_view training activated
+            },
             "loss": {
+                "use_one_view_df_loss": True, # one-view losses can be applied any time
+                "use_one_view_af_loss": True, # af loss is only applied if af use is activated
+                "use_two_view_df_loss": True, # two view losses are only applied if two-view training activated
+                "use_one_view_kp_loss": True, # use one-view keypoint loss ex. focal, l1 etc
                 "kp_loss_name": "focal_loss",  # other options: bce, weighted_bce or focal loss
                 "kp_loss_parameters": {
                     "lambda_weighted_bce": 200,  # weighted bce parameter factor how to boost keypoint loss in map
@@ -87,11 +92,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 },
                 "refinement_radius": 5,  # radius for softargmax loss
                 "loss_weights": {
-                    "line_af_weight": 1,
-                    "line_df_weight": 1,
+                    "one_view_line_af_weight": 1,
+                    "one_view_line_df_weight": 1,
+                    "two_view_line_df_weight": 1,
                     "keypoint_weight": 1,
-                    "descriptor_weight": 1,
-                    "softargmax_weight": 1,
+                    "one_view_descriptor_weight": 1,
+                    "two_view_descriptor_weight": 1,
+                    "softargmax_weight": 0, # if > 0 activates calculation of soft argmax loss on keypoint detection
                 },
             },
         },
@@ -222,8 +229,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Initialize Lightweight ALIKED model to perform on-the-fly ground-truth generation for descriptors if training in one-view setting
         if (
             conf.training.do
-            and conf.training.train_descriptors.do
-            and not conf.training.two_view
+            and conf.training.train_descriptors.use_one_view_loss
         ):
             logger.warning("Load ALiked Lightweight model for descriptor training...")
             aliked_gt_cfg = {
@@ -420,8 +426,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.timeit:
             self.timings["keypoint-detection"].append(sync_and_time() - start_keypoints)
 
-        # raw output of DKD needed to generate GT-Descriptors (ONLY done in ONE_VIEW training)
-        if self.conf.training.do and self.conf.training.train_descriptors.do and not self.conf.training.two_view:
+        # raw output of DKD needed to generate GT-Descriptors (ONLY done if one-view-loss used)
+        if self.conf.training.do and self.conf.training.use_one_view_loss:
             output["keypoints_raw"] = keypoints
 
         _, _, h, w = image.shape
@@ -640,15 +646,17 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         losses = {}
         metrics = {}
+        losses["total"] = 0
 
         prediction_dict = {}
         if self.conf.training.two_view:
-            for k, v in pred.items():
+            for k, v in pred.items(): # TODO: what is this for? We basically create new entries without the 0 -> possibly to also use 1iew losses during two-view
                 if k.endswith("0"):
                     prediction_dict[k[:-1]] = v
         else:
             prediction_dict = pred
 
+        # Load view0 ground truth if two view TODO: Why not for view 1? (dataloader limit? could use for "augmented train")
         gt_dict = data["view0"]["cache"] if self.conf.training.two_view else data
         H = data["H_0to1"] if self.conf.training.two_view else None
 
@@ -659,47 +667,54 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ].int()
 
         # Use BCE, WeightedBCE or Focal Loss for point position loss
-        keypoint_scoremap_loss = self.loss_fn(
-            prediction_dict["keypoint_and_junction_score_map"] * padding_mask,
-            gt_dict["superpoint_heatmap"] * padding_mask,
-        ).mean(dim=(1, 2))
+        if self.conf.training.loss.use_one_view_kp_loss:
+            keypoint_scoremap_loss = self.loss_fn(
+                prediction_dict["keypoint_and_junction_score_map"] * padding_mask,
+                gt_dict["superpoint_heatmap"] * padding_mask,
+            ).mean(dim=(1, 2))
+            losses["one_view_kp_scoremap"] = keypoint_scoremap_loss
+            losses["total"] += self.conf.training.loss.loss_weights.keypoint_weight * keypoint_scoremap_loss
 
-        losses["keypoint_and_junction_score_map"] = keypoint_scoremap_loss
         # If training descriptors: decide between one-view and two-view node
-        if self.conf.training.train_descriptors.do:
-            if not self.conf.training.two_view:
-                # in case of one view: generate gt descriptors to directly supervise using l1 loss
-                data = {
-                    **data,
-                    **self.get_groundtruth_descriptors(
-                        {
-                            "keypoints": prediction_dict["keypoints_raw"],
-                            "image": gt_dict["image"],
-                        }
-                    ),
-                }
-                keypoint_descriptor_loss = F.l1_loss(
-                    prediction_dict["descriptors"],
-                    gt_dict["aliked_descriptors"],
-                    reduction="none",
-                ).mean(dim=(1, 2))
-            else:
-                # in case of two-view: use the caps window loss for descriptors
-                matches = compute_matches(
-                    prediction_dict["keypoints"], pred["keypoints1"], H
-                )
-                keypoint_descriptor_loss = 0
-                for b_idx in range(len(matches)):
-                    keypoint_descriptor_loss += sparse_nre_loss(
-                        prediction_dict["descriptors"][b_idx],
-                        pred["descriptors1"][b_idx],
-                        matches[b_idx],
-                    )
-                keypoint_descriptor_loss /= len(matches)
-            losses["descriptors"] = keypoint_descriptor_loss.unsqueeze(0)
+        if self.conf.training.train_descriptors.use_one_view_loss:
+            # in case of one view: generate gt descriptors to directly supervise using l1 loss
+            data = {
+                **data,
+                **self.get_groundtruth_descriptors(
+                    {
+                        "keypoints": prediction_dict["keypoints_raw"],
+                        "image": gt_dict["image"],
+                    }
+                ),
+            }
+            keypoint_descriptor_loss = F.l1_loss(
+                prediction_dict["descriptors"],
+                gt_dict["aliked_descriptors"],
+                reduction="none",
+            ).mean(dim=(1, 2))
+            losses["one_view_kp_descriptors"] = keypoint_descriptor_loss
+            losses["total"] += self.conf.training.loss.loss_weights.one_view_descriptor_weight * keypoint_descriptor_loss
 
-        # use angular loss for anglefield, if use of af is activated
-        if self.conf.use_line_anglefield:
+        # Calculate two view loss (Sparse NRE for descriptors if wanted)
+        if self.conf.training.train_descriptors.use_two_view_loss and self.conf.traiming.two_view:
+            # in case of two-view: use the caps window loss for descriptors
+            matches = compute_matches(
+                prediction_dict["keypoints"], pred["keypoints1"], H
+            )
+            keypoint_descriptor_loss = 0
+            for b_idx in range(len(matches)): # TODO: can i make this faster? And does it consider projections from both sides?
+                keypoint_descriptor_loss += sparse_nre_loss(
+                    prediction_dict["descriptors"][b_idx],
+                    pred["descriptors1"][b_idx],
+                    matches[b_idx],
+                )
+            keypoint_descriptor_loss /= len(matches)
+            losses["two_view_kp_descriptors"] = keypoint_descriptor_loss.unsqueeze(0)
+            losses["total"] += self.conf.training.loss.loss_weights.two_view_descriptor_weight * losses["two_view_kp_descriptors"]
+
+
+        # use angular loss for anglefield, only if use of af is activated
+        if self.conf.use_line_anglefield and self.conf.training.loss.use_one_view_af_loss:
             af_diff = (
                 gt_dict["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
             )
@@ -709,21 +724,25 @@ class JointPointLineDetectorDescriptor(BaseModel):
             ).mean(
                 dim=(1, 2)
             )  # pixelwise minimum
-            losses["line_anglefield"] = line_af_loss
+            losses["one_view_line_af"] = line_af_loss
+            losses["total"] += self.conf.training.loss.loss_weights.one_view_line_af_weight * line_af_loss
 
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
-        gt_mask = gt_dict["deeplsd_distance_field"] < self.conf.line_neighborhood
-        line_df_loss = F.l1_loss(
-            self.normalize_df(pred["line_distancefield0"]) * gt_mask * padding_mask,
-            self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"])
-            * gt_mask
-            * padding_mask,
-            # only supervise in line neighborhood
-            reduction="none",
-        ).mean(dim=(1, 2))
-        losses["line_distancefield"] = line_df_loss
-        if self.conf.training.two_view:
+        if self.conf.training.loss.use_one_view_df_loss:
+            gt_mask = gt_dict["deeplsd_distance_field"] < self.conf.line_neighborhood
+            line_df_loss = F.l1_loss(
+                self.normalize_df(pred["line_distancefield0"]) * gt_mask * padding_mask,
+                self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"])
+                * gt_mask
+                * padding_mask,
+                # only supervise in line neighborhood
+                reduction="none",
+            ).mean(dim=(1, 2))
+            losses["one_view_line_df"] = line_df_loss
+            losses["total"] += self.conf.training.loss.loss_weights.one_view_line_df_weight * line_df_loss
+
+        if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
             # In case of two-view, add df consistency loss
             warped_df = self.warp_data(
                 df=pred["line_distancefield1"],
@@ -743,7 +762,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             # warped_df = warp_perspective(pred["line_distancefield1"][:,None,:,:],torch.linalg.inv(H), tuple(pred["line_distancefield0"].shape[1:]))
             warped_df = warped_df.squeeze(1)
-            losses["line_distancefield"] += F.l1_loss(
+            two_view_line_df_loss = F.l1_loss(
                 self.normalize_df(pred["line_distancefield0"])
                 * gt_mask
                 * padding_mask
@@ -752,26 +771,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 # only supervise in line neighborhood
                 reduction="none",
             ).mean(dim=(1, 2))
+            losses["two_view_line_df"] = two_view_line_df_loss
+            losses["total"] += self.conf.training.loss.loss_weights.two_view_line_df_weight * two_view_line_df_loss
 
-        # Compute overall loss
-        overall_loss = (
-            self.conf.training.loss.loss_weights.keypoint_weight
-            * losses["keypoint_and_junction_score_map"]
-            + self.conf.training.loss.loss_weights.line_df_weight
-            * losses["line_distancefield"]
-        )
-        if self.conf.use_line_anglefield:
-            overall_loss += (
-                self.conf.training.loss.loss_weights.line_af_weight
-                * losses["line_anglefield"]
-            )
-        if self.conf.training.train_descriptors.do:
-            overall_loss += (
-                self.conf.training.loss.loss_weights.descriptor_weight
-                * losses["descriptors"]
-            )
 
-        # soft argmax loss
+        # soft argmax loss TODO: check if applicable
         if (
             self.conf.training.loss.refinement_radius > 0
             and self.conf.training.loss.loss_weights.softargmax_weight > 0
@@ -784,14 +788,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 H,
                 self.conf.training.loss.refinement_radius,
             )
-            losses["loc_loss"] = loc_loss
-            overall_loss += (
-                self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
-            )
+            losses["soft_argmax_kp_loss"] = loc_loss
+            losses["total"] += self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
 
-        losses["total"] = overall_loss
-
-        # add metrics if not in training mode
+        # add metrics if in validation mode
         if not self.training:
             metrics = self.metrics(pred, data)
         return losses, metrics
@@ -842,7 +842,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         """
         sd = super().state_dict(*args, **kwargs)
         # don't store lightweight aliked model for descriptor gt computation
-        if self.conf.training.train_descriptors.do:
+        if self.conf.training.train_descriptors.use_one_view_loss:
             for k in list(sd.keys()):
                 if k.startswith("aliked_lw"):
                     del sd[k]
