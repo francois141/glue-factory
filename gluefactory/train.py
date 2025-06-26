@@ -472,7 +472,7 @@ def training(rank, conf, output_dir, args):
                 tot_n_samples *= train_loader.batch_size
 
             model.train()
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
 
             with torch.autocast(
                 device_type="cuda" if torch.cuda.is_available() else "cpu",
@@ -542,7 +542,7 @@ def training(rank, conf, output_dir, args):
                 if rank == 0:
                     str_losses = [f"{k} {v:.3E}" for k, v in losses.items()]
                     logger.info(
-                        "[E {} | it {}] loss {{{}}}".format(
+                        "[E {} | it {}] loƒzeross {{{}}}".format(
                             epoch, it, ", ".join(str_losses)
                         )
                     )

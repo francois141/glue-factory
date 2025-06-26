@@ -6,7 +6,7 @@ data:
     train_batch_size: 8  # given for all gpus
     val_batch_size: 8
     prefetch_factor: 2
-    reshape: 800  # new resizing keeps aspect ratio so quadratic image is not guaranteed
+    reshape: 800  # new resizing keeps aspect-ratio so quadratic image is not guaranteed
     square_pad: True  # thus for a batchsize > 1 square padding needs to be activated for batching
     multiscale_learning:
         do: False  # to use multiscale training, reshape must be set to false
@@ -19,8 +19,8 @@ data:
             # ATTENTION: if deeplsd line ep are used as kp gt, using score heatmap is discouraged, as deeplsd does not assign scores to line ep and thus we set all to one
             load_points: False
             use_score_heatmap: False # Use scores instead of just set kp location to 1 in the map
-            max_num_keypoints: 63  # how many gt keypoints are loaded (could be used for kp losses later on). The heatmap is generated with all kp anyway. max num is needed for batching.
-            max_num_heatmapo_keypoints: -1
+            max_num_keypoints: 63  # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
+            max_num_heatmap_keypoints: -1 # number of gt keypoints used to create heatmap. Set to -1 to use all
             use_deeplsd_lineendpoints_as_kp_gt: False  # set true to use deep-lsd line endpoints as keypoint groundtruth
             use_superpoint_kp_gt: True  # set true to use default HA-Superpoint groundtruth
         line_gt:

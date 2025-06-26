@@ -427,7 +427,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.timings["keypoint-detection"].append(sync_and_time() - start_keypoints)
 
         # raw output of DKD needed to generate GT-Descriptors (ONLY done if one-view-loss used)
-        if self.conf.training.do and self.conf.training.use_one_view_loss:
+        if self.conf.training.do and self.conf.training.train_descriptors.use_one_view_loss:
             output["keypoints_raw"] = keypoints
 
         _, _, h, w = image.shape
@@ -660,7 +660,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         gt_dict_view0 = data["view0"]["cache"] if self.conf.training.two_view else data
         gt_dict_view1 = data["view1"]["cache"] if self.conf.training.two_view else None
         H = data["H_0to1"] if self.conf.training.two_view else None # for each sample in batch there is a separate homography
-        H_inv = torch.linalg.inv(H) # inv calc supports batch of matrix
+        H_inv = torch.linalg.inv(H) if self.conf.training.two_view else None# inv calc supports batch of matrix
 
         img = data["view0"]["image"] if self.conf.training.two_view else data["image"]
         # define padding mask which is only ones if no padding is used -> makes loss compatible with any scaling technique and whether padding is used or not
@@ -693,14 +693,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
             }
             keypoint_descriptor_loss = F.l1_loss(
                 prediction_dict["descriptors"],
-                gt_dict_view0["aliked_descriptors"],
+                data["aliked_descriptors"],
                 reduction="none",
             ).mean(dim=(1, 2))
             losses["one_view_kp_descriptors"] = keypoint_descriptor_loss
             losses["total"] += self.conf.training.loss.loss_weights.one_view_descriptor_weight * keypoint_descriptor_loss
 
         # Calculate two view loss (Sparse NRE for descriptors if wanted)
-        if self.conf.training.train_descriptors.use_two_view_loss and self.conf.traiming.two_view:
+        if self.conf.training.train_descriptors.use_two_view_loss and self.conf.training.two_view:
             # Two Way sparse NRE computation
 
             # best match in kp of A - for each kp projected from B to A
@@ -750,8 +750,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
             line_df_loss = F.l1_loss(
-                self.normalize_df(pred["line_distancefield0"]) * df_gt_mask_view0 * padding_mask_view0,
-                self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"])
+                self.normalize_df(pred["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0,
+                self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
                 * df_gt_mask_view0
                 * padding_mask_view0,
                 # only supervise in line neighborhood
