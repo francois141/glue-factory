@@ -656,21 +656,25 @@ class JointPointLineDetectorDescriptor(BaseModel):
         else:
             prediction_dict = pred
 
-        # Load view0 ground truth if two view TODO: Why not for view 1? (dataloader limit? could use for "augmented train")
-        gt_dict = data["view0"]["cache"] if self.conf.training.two_view else data
-        H = data["H_0to1"] if self.conf.training.two_view else None
+        # Load view0 ground truth if two view
+        gt_dict_view0 = data["view0"]["cache"] if self.conf.training.two_view else data
+        gt_dict_view1 = data["view1"]["cache"] if self.conf.training.two_view else None
+        H = data["H_0to1"] if self.conf.training.two_view else None # for each sample in batch there is a separate homography
+        H_inv = torch.linalg.inv(H) # inv calc supports batch of matrix
 
         img = data["view0"]["image"] if self.conf.training.two_view else data["image"]
         # define padding mask which is only ones if no padding is used -> makes loss compatible with any scaling technique and whether padding is used or not
-        padding_mask = gt_dict.get("padding_mask", torch.ones_like(img))[
+        padding_mask_view0 = gt_dict_view0.get("padding_mask", torch.ones_like(img))[ # padding should be the same for both views
             :, 0, :, :
         ].int()
+        df_gt_mask_view0 = gt_dict_view0["deeplsd_distance_field"] < self.conf.line_neighborhood
+        df_gt_mask_view1 = gt_dict_view1["deeplsd_distance_field"] < self.conf.line_neighborhood if self.conf.training.two_view else None
 
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
             keypoint_scoremap_loss = self.loss_fn(
-                prediction_dict["keypoint_and_junction_score_map"] * padding_mask,
-                gt_dict["superpoint_heatmap"] * padding_mask,
+                prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                gt_dict_view0["superpoint_heatmap"] * padding_mask_view0,
             ).mean(dim=(1, 2))
             losses["one_view_kp_scoremap"] = keypoint_scoremap_loss
             losses["total"] += self.conf.training.loss.loss_weights.keypoint_weight * keypoint_scoremap_loss
@@ -683,13 +687,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 **self.get_groundtruth_descriptors(
                     {
                         "keypoints": prediction_dict["keypoints_raw"],
-                        "image": gt_dict["image"],
+                        "image": gt_dict_view0["image"],
                     }
                 ),
             }
             keypoint_descriptor_loss = F.l1_loss(
                 prediction_dict["descriptors"],
-                gt_dict["aliked_descriptors"],
+                gt_dict_view0["aliked_descriptors"],
                 reduction="none",
             ).mean(dim=(1, 2))
             losses["one_view_kp_descriptors"] = keypoint_descriptor_loss
@@ -705,7 +709,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
 
             # best match in kp of B - for each kp projected from A to B
-            H_inv = torch.linalg.inv(H)
             matches_A_to_B = compute_matches(
                 pred["keypoints1"], prediction_dict["keypoints"], H_inv, best_match_only=True
             )
@@ -732,11 +735,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # use angular loss for anglefield, only if use of af is activated
         if self.conf.use_line_anglefield and self.conf.training.loss.use_one_view_af_loss:
             af_diff = (
-                gt_dict["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
+                gt_dict_view0["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
             )
             line_af_loss = (
                 torch.minimum(af_diff**2, (torch.pi - af_diff.abs()) ** 2)
-                * padding_mask
+                * padding_mask_view0
             ).mean(
                 dim=(1, 2)
             )  # pixelwise minimum
@@ -746,49 +749,69 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
-            gt_mask = gt_dict["deeplsd_distance_field"] < self.conf.line_neighborhood
             line_df_loss = F.l1_loss(
-                self.normalize_df(pred["line_distancefield0"]) * gt_mask * padding_mask,
+                self.normalize_df(pred["line_distancefield0"]) * df_gt_mask_view0 * padding_mask_view0,
                 self.normalize_df(data["view0"]["cache"]["deeplsd_distance_field"])
-                * gt_mask
-                * padding_mask,
+                * df_gt_mask_view0
+                * padding_mask_view0,
                 # only supervise in line neighborhood
                 reduction="none",
             ).mean(dim=(1, 2))
             losses["one_view_line_df"] = line_df_loss
             losses["total"] += self.conf.training.loss.loss_weights.one_view_line_df_weight * line_df_loss
 
+        # Two view df consistency loss
         if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
-            # In case of two-view, add df consistency loss
-            warped_df = self.warp_data(
+            # img1 to img0
+            warped_df_1_to_0 = self.warp_data(
                 df=pred["line_distancefield1"],
                 angle=data["view1"]["cache"]["deeplsd_angle_field"],
-                H=torch.linalg.inv(H),
+                H=H_inv,
                 ps=tuple(pred["line_distancefield0"].shape[1:]),
-            )
-            valid_mask = warp_perspective(
+            ).squeeze(1)
+            # valid mask - warp image of ones from view1 to view0. Padding with 0 around warped part gives mask
+            valid_mask_1_to_0 = warp_perspective(
+                torch.ones_like(
+                    pred["line_distancefield1"][None],
+                    device=pred["line_distancefield1"].device,
+                ),
+                H_inv,
+                tuple(pred["line_distancefield1"].shape[1:]),
+                mode="nearest",
+            ).squeeze(1)
+
+            loss_1to0 = F.l1_loss(
+                self.normalize_df(pred["line_distancefield0"]) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
+                self.normalize_df(warped_df_1_to_0) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
+                reduction="none",
+            ).mean(dim=(1, 2))
+
+            # img0 to img1
+            warped_df_0to1 = self.warp_data(
+                df=pred["line_distancefield0"],
+                angle=data["view0"]["cache"]["deeplsd_angle_field"],  # Note: view0 angle field
+                H=H,  # Note: H instead of H_inv
+                ps=tuple(pred["line_distancefield1"].shape[1:]),
+            ).squeeze(1)
+            # valid mask for 0->1 warping
+            valid_mask_0to1 = warp_perspective(
                 torch.ones_like(
                     pred["line_distancefield0"][None],
                     device=pred["line_distancefield0"].device,
                 ),
-                torch.linalg.inv(H),
+                H,  # Note: H instead of H_inv
                 tuple(pred["line_distancefield0"].shape[1:]),
                 mode="nearest",
             ).squeeze(1)
-
-            # warped_df = warp_perspective(pred["line_distancefield1"][:,None,:,:],torch.linalg.inv(H), tuple(pred["line_distancefield0"].shape[1:]))
-            warped_df = warped_df.squeeze(1)
-            two_view_line_df_loss = F.l1_loss(
-                self.normalize_df(pred["line_distancefield0"])
-                * gt_mask
-                * padding_mask
-                * valid_mask,
-                self.normalize_df(warped_df) * gt_mask * padding_mask * valid_mask,
-                # only supervise in line neighborhood
+            # compute loss
+            loss_0to1 = F.l1_loss(
+                self.normalize_df(pred["line_distancefield1"]) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
+                self.normalize_df(warped_df_0to1) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
                 reduction="none",
             ).mean(dim=(1, 2))
-            losses["two_view_line_df"] = two_view_line_df_loss
-            losses["total"] += self.conf.training.loss.loss_weights.two_view_line_df_weight * two_view_line_df_loss
+
+            losses["two_view_line_df"] = (loss_0to1 + loss_1to0) / 2
+            losses["total"] += self.conf.training.loss.loss_weights.two_view_line_df_weight * losses["two_view_line_df"]
 
 
         # soft argmax loss TODO: check if applicable
