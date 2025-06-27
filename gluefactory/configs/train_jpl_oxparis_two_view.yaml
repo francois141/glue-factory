@@ -9,9 +9,9 @@ data:
       patch_shape: [800, 800]
     photometric:
         p: 0.75
-    train_size: 11000
-    val_size: 1000
-    batch_size: 32  # 16 per 10Gb of GPU mem
+    train_size: 11500
+    val_size: 500
+    batch_size: 12  # 16 per 10Gb of GPU mem
     num_workers: 12
     load_features:
         do: True
@@ -82,5 +82,5 @@ train:
             patience: 5
     keep_last_checkpoints: 5
     submodules: []
-    plot: [4, 'gluefactory.datasets.oxford_paris_2view_jpldd.plot_predictions']
+    #plot: [4, 'gluefactory.datasets.oxford_paris_2view_jpldd.plot_predictions']
 

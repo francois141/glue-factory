@@ -1,14 +1,13 @@
 #!/bin/bash
 # Cmd params 'run_training_slurm.sh [exp_name] [path to conf]'
-# Run multi gpu on same node
+# Run multi gpu on same node. Dont spawn multiple processes as glue-factory does it automatically
 
 #SBATCH --time=1-00:00:00
-#SBATCH --ntasks=4
 #SBATCH --nodes=1
 #SBATCH --gpus=4
 #SBATCH --gres=gpumem:23g
-#SBATCH --cpus-per-task=5
-#SBATCH --mem-per-cpu=6000
+#SBATCH --cpus-per-task=8
+#SBATCH --mem-per-cpu=8000
 #SBATCH --output=train.out
 #SBATCH --mail-type=END
 #SBATCH --mail-user=r.kreft@stud.ethz.ch
