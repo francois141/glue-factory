@@ -34,7 +34,7 @@ class DeepLSD(BaseModel):
         ckpt = DATA_PATH / "weights/deeplsd_md.tar"
         if not ckpt.is_file():
             self.download_model(ckpt)
-        ckpt = torch.load(ckpt, map_location="cpu")
+        ckpt = torch.load(ckpt, map_location="cpu", weights_only=False)
         self.net = deeplsd_inference.DeepLSD(conf.model_conf).eval()
         self.net.load_state_dict(ckpt["model"])
         self.set_initialized()
@@ -153,7 +153,7 @@ class DeepLSD(BaseModel):
             scores = np.concatenate([scores, np.zeros(pad, dtype=np.float32)], axis=0)
             valid_mask = np.concatenate([valid_mask, np.zeros(pad, dtype=bool)], axis=0)
 
-        return {"lines": segs, "line_scores": scores, "valid_lines": valid_mask}
+        return {"lines": segs, "line_scores": scores}
 
     def loss(self, pred, data):
         raise NotImplementedError
