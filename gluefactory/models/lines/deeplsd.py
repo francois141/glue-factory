@@ -153,7 +153,7 @@ class DeepLSD(BaseModel):
             scores = np.concatenate([scores, np.zeros(pad, dtype=np.float32)], axis=0)
             valid_mask = np.concatenate([valid_mask, np.zeros(pad, dtype=bool)], axis=0)
 
-        return {"lines": segs, "line_scores": scores, "valid_lines": valid_mask}
+        return {"lines": segs, "line_scores": scores}
 
     def loss(self, pred, data):
         raise NotImplementedError
