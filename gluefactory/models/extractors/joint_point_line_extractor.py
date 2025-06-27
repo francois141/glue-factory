@@ -601,16 +601,16 @@ class JointPointLineDetectorDescriptor(BaseModel):
         warped_dfs = []
 
         for i in range(df.shape[0]):
-            with torch.no_grad():
+            with torch.no_grad(): # TODO: could be batched or made simpler to warp the distance field?
                 offset = df[i][:, :, None] * torch.stack(
                     [torch.sin(angle[i]), torch.cos(angle[i])], dim=-1
                 )
             closest = pix_loc + offset
             warped_closest = warp_points_torch(
-                closest.reshape(-1, 2), H, inverse=False
+                closest.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
             ).reshape(h, w, 2)
             warped_pix_loc = warp_points_torch(
-                pix_loc.reshape(-1, 2), H, inverse=False
+                pix_loc.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
             ).reshape(h, w, 2)
 
             offset_norm = torch.linalg.norm(offset, dim=-1)
@@ -623,10 +623,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             # Warp the DF
             warped_df = warp_perspective(
-                df[i][None, None], H, ps, mode="bilinear"
+                df[i][None, None], H[i].unsqueeze(0), ps, mode="bilinear"
             ).squeeze()
             warped_scaling = warp_perspective(
-                scaling[None, None], H, ps, mode="bilinear"
+                scaling[None, None], H[i].unsqueeze(0), ps, mode="bilinear"
             ).squeeze()
             warped_df *= warped_scaling
 
@@ -775,7 +775,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             # valid mask - warp image of ones from view1 to view0. Padding with 0 around warped part gives mask
             valid_mask_1_to_0 = warp_perspective(
                 torch.ones_like(
-                    prediction_dict["line_distancefield1"][None],
+                    prediction_dict["line_distancefield1"].unsqueeze(1),
                     device=prediction_dict["line_distancefield1"].device,
                 ),
                 H_inv,
@@ -799,7 +799,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             # valid mask for 0->1 warping
             valid_mask_0to1 = warp_perspective(
                 torch.ones_like(
-                    prediction_dict["line_distancefield"][None],
+                    prediction_dict["line_distancefield"].unsqueeze(1),
                     device=prediction_dict["line_distancefield"].device,
                 ),
                 H,  # Note: H instead of H_inv
