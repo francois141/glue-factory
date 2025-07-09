@@ -575,7 +575,7 @@ def training(rank, conf, output_dir, args):
                     and (it > 0 or epoch == -int(args.no_eval_0))
                 )
                 or stop
-                #or it == (len(train_loader) - 1)
+                or it == (len(train_loader) - 1)
             ):
                 with fork_rng(seed=conf.train.seed):
                     results, pr_metrics, figures = do_evaluation(
@@ -617,7 +617,6 @@ def training(rank, conf, output_dir, args):
                         )
                         logger.info(f"New best val: {conf.train.best_key}={best_eval}")
                 torch.cuda.empty_cache()  # should be cleared at the first iter
-                del results, pr_metrics, figures
 
             if (tot_it % conf.train.save_every_iter == 0 and tot_it > 0) and rank == 0:
                 if results is None:
@@ -651,16 +650,6 @@ def training(rank, conf, output_dir, args):
         # Store Checkpoint et end of the epoch
         if rank == 0:
             # at least eval each epoch
-            if results is None:
-                results, _, _ = do_evaluation(
-                    model,
-                    val_loader,
-                    device,
-                    loss_fn,
-                    conf.train,
-                    rank,
-                    pbar=(rank == -1),
-                )
             best_eval = save_experiment(
                 model,
                 optimizer,
