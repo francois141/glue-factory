@@ -731,8 +731,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
             overall_mean = (keypoint_descriptor_lossBA + keypoint_descriptor_lossAB) / 2
             # repeat mean loss across batch dimension to have same mean later on consolidation
-            losses["two_view_kp_descriptors"] = overall_mean
-            losses["total"] += self.conf.training.loss.loss_weights.two_view_descriptor_weight * overall_mean.repeat(img.shape[0])
+            losses["two_view_kp_descriptors"] = overall_mean.repeat(img.shape[0])
+            losses["total"] += self.conf.training.loss.loss_weights.two_view_descriptor_weight * losses["two_view_kp_descriptors"]
 
 
         # use angular loss for anglefield, only if use of af is activated
