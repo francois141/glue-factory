@@ -110,6 +110,9 @@ class FastLSDLineExtractor(BaseModel):
             indices = indices[: self.conf.max_num_lines]
             lines = lines[indices]
 
+        if self.conf.merge:
+            lines = merge_lines(torch.from_numpy(lines), thresh=4, overlap_thresh=0).numpy()
+
         # Pad if necessary
         n = len(lines)
         valid_mask = np.ones(n, dtype=bool)
@@ -119,8 +122,7 @@ class FastLSDLineExtractor(BaseModel):
                 [lines, np.zeros((pad, 2, 2), dtype=np.float32)], axis=0
             )
             valid_mask = np.concatenate([valid_mask, np.zeros(pad, dtype=bool)], axis=0)
-        if self.conf.merge:
-            lines = merge_lines(torch.from_numpy(lines), thresh=4, overlap_thresh=0).numpy()
+
         return {"lines": lines, "valid_lines": valid_mask}
 
     def _forward(self, data):

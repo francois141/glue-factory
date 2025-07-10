@@ -76,11 +76,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
                 "gt_aliked_model": "aliked-n32",
                 "use_one_view_loss": True, # In one view training can decide if train descriptors with this flag
-                "use_two_view_loss": True, # can only be used if two_view training activated
+                "use_two_view_loss": True, # can only be used if two_view training activated (sparseNRE loss)
             },
             "loss": {
                 "use_one_view_df_loss": True, # one-view losses can be applied any time
-                "use_one_view_af_loss": True, # af loss is only applied if af use is activated
+                "use_one_view_af_loss": True, # af loss is only applied if af-use is activated
                 "use_two_view_df_loss": True, # two view losses are only applied if two-view training activated
                 "use_one_view_kp_loss": True, # use one-view keypoint loss ex. focal, l1 etc
                 "kp_loss_name": "focal_loss",  # other options: bce, weighted_bce or focal loss
@@ -98,7 +98,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     "keypoint_weight": 1,
                     "one_view_descriptor_weight": 1,
                     "two_view_descriptor_weight": 1,
-                    "softargmax_weight": 0, # if > 0 activates calculation of soft argmax loss on keypoint detection
+                    "softargmax_weight": 1, # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
                 },
             },
         },
@@ -454,7 +454,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Only Perform line detection when NOT in training mode
         if (
             self.conf.line_detection.do and not self.training
-        ):  # TODO: we might need to do line detect during training for an end to end train setting
+        ):
             if self.conf.timeit:
                 start_lines = sync_and_time()
 
@@ -467,7 +467,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "line_anglefield": line_angle_field.detach().clone(),
                 "line_distancefield": line_distance_field.detach().clone(),
                 "image": image,
-                "keypoints": rescaled_kp,
+                "keypoints": rescaled_kp.clone(),
                 "kp_descriptors": output["descriptors"].clone(),
             }
             pred_line_data = self.line_extractor(line_data)
@@ -754,9 +754,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             losses["total"] += self.conf.training.loss.loss_weights.two_view_line_df_weight * losses["two_view_line_df"]
 
 
-        # soft argmax loss TODO: check if applicable
+        # soft argmax loss (Only applicable with two-view pipeline)
         if (
-            self.conf.training.loss.refinement_radius > 0
+            self.conf.training.two_view
+            and self.conf.training.loss.refinement_radius > 0
             and self.conf.training.loss.loss_weights.softargmax_weight > 0
         ):
             loc_loss = soft_argmax_only_loss(
