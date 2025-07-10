@@ -17,6 +17,15 @@ git clone https://github.com/cvg/glue-factory
 cd glue-factory
 python3 -m pip install -e .  # editable mode
 ```
+
+### Joint point line additional instructions
+
+This scripts downloads and installs the submodules to work on the joint point line detection project
+
+```bash
+./install.sh 
+```
+
 Some advanced features might require installing the full set of dependencies:
 ```bash
 python3 -m pip install -e .[extra]
