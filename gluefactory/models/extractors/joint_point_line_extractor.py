@@ -17,7 +17,7 @@ from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
-from gluefactory.models.lines.pold2_extractor import LineExtractor
+from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
 from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
 from gluefactory.models.utils.metrics_points import (
     compute_loc_error,
@@ -104,7 +104,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
         },
         "line_detection": {  # by default we use the POLD2 Line Extractor (MLP with Angle Field)
             "do": True,
-            "conf": LineExtractor.default_conf,
+            "name": "lines.fast_lsd_extractor",
+            "conf": FastLSDLineExtractor.default_conf,
             # following options only used for ablations
             "use_deeplsd_kp": False,  # whether we should use DeepLSD line endpoints as junction candidates. Otherwise use JPLDD keypoints
             "use_deeplsd_df_af": False,  # whether we should use Distance and Angle Field from JPLDD or DeepLSD
@@ -283,9 +284,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # Load line extractor and import line metrics if line detection is used
         if self.conf.line_detection.do:
-            self.line_extractor = LineExtractor(
-                self.conf.line_detection.conf,
-            )
+            logger.info(f"Load line extractor: {self.conf.line_detection.name}")
+            self.line_extractor = get_model(self.conf.line_detection.name)(self.conf.line_detection.conf)
 
         # only load deeplsd model if we perform ablation or development
         if self.conf.line_detection.do and (
@@ -457,88 +457,25 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ):  # TODO: we might need to do line detect during training for an end to end train setting
             if self.conf.timeit:
                 start_lines = sync_and_time()
-            lines = []
-            valid_lines = []
-            line_descriptors = []
-            line_indices = []
 
             if output.get("line_anglefield", None) is None:
                 # create dummy so that zipping works
                 line_angle_field = torch.zeros_like(line_distance_field)
 
-            for df, af, kp, desc in zip(
-                line_distance_field, line_angle_field, rescaled_kp, keypoint_descriptors
-            ):
-                # Only use deeplsd if explicitly activated
-                if (
-                    self.conf.line_detection.use_deeplsd_kp
-                    or self.conf.line_detection.use_deeplsd_df_af
-                ):
-                    img = (image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(
-                        np.uint8
-                    )
-                    c_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                    gray_img = cv2.cvtColor(c_img, cv2.COLOR_BGR2GRAY)
-                    inputs = {
-                        "image": torch.tensor(
-                            gray_img, dtype=torch.float, device=padded_img.device
-                        )[None, None]
-                        / 255.0
-                    }
-                    with torch.no_grad():
-                        deeplsd_output = self.deeplsd(inputs)
-                    deeplsd_lines = np.array(deeplsd_output["lines"][0]).astype(int)
+            # Perform forward pass for line detector, batching handled internally
+            line_data = {
+                "line_anglefield": line_angle_field.detach().clone(),
+                "line_distancefield": line_distance_field.detach().clone(),
+                "image": image,
+                "keypoints": rescaled_kp,
+                "kp_descriptors": output["descriptors"].clone(),
+            }
+            pred_line_data = self.line_extractor(line_data)
 
-                    deeplsd_lines_torch = torch.tensor(deeplsd_lines).cuda()
-                    deeplsd_lines_torch[:, :, 0] = torch.clamp(
-                        deeplsd_lines_torch[:, :, 0], 0, img.shape[1]
-                    )
-                    deeplsd_lines_torch[:, :, 1] = torch.clamp(
-                        deeplsd_lines_torch[:, :, 1], 0, img.shape[0]
-                    )
-                    keypoints_deeplsd = torch.cat(
-                        (deeplsd_lines_torch[:, 0], deeplsd_lines_torch[:, 1])
-                    )
-                # prepare line data for line detection!
-                line_data = {
-                    "points": (
-                        torch.clone(kp)
-                        if not self.conf.line_detection.use_deeplsd_kp
-                        else keypoints_deeplsd
-                    ),
-                    "distance_map": (
-                        torch.clone(df)
-                        if not self.conf.line_detection.use_deeplsd_df_af
-                        else deeplsd_output["df"][0]
-                    ),
-                    "descriptors": (
-                        torch.clone(desc)
-                        if not self.conf.line_detection.use_deeplsd_kp
-                        else torch.zeros((keypoints_deeplsd.shape[0], 128)).cuda()
-                    ),
-                    "angle_map": None,
-                }
-                if self.conf.use_line_anglefield:
-                    line_data["angle_map"] = (
-                        torch.clone(af)
-                        if not self.conf.line_detection.use_deeplsd_df_af
-                        else deeplsd_output["line_level"][0]
-                    )
-
-                line_pred = self.line_extractor(line_data)
-                lines.append(line_pred["lines"])
-                line_descriptors.append(line_pred["line_descriptors"])
-                line_indices.append(line_pred["line_endpoint_indices"])
-                # Line matchers expect the lines to be stored as line endpoints where line endpoint = coordinate of respective keypoint
-                if len(lines) == 0:
-                    logger.warning("NO LINES DETECTED")
-
-                valid_lines.append(
-                    torch.ones(len(lines[-1])).to(line_distance_field[-1].device)
-                )
-            output["lines"] = torch.stack(lines, dim=0)
-            output["line_descriptors"] = torch.stack(line_descriptors, dim=0)
-            output["valid_lines"] = torch.stack(valid_lines, dim=0)
+            output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
+            if self.conf.line_detection.conf.return_line_descriptors:
+                output["line_descriptors"] = torch.stack(pred_line_data["line_descriptors"], dim=0)
+            output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
 
             # Use aliked points sampled from inbetween Line endpoints?
             if self.conf.timeit:

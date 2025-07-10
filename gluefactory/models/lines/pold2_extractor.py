@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import OmegaConf
+from torch import Tensor
 
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.lines.line_refinement import merge_lines_torch
@@ -50,6 +51,7 @@ class LineExtractor(BaseModel):
         "coeff_dir": "line_extraction_coeffs",
         "debug": False,
         "debug_dir": "tmp",
+        "return_line_descriptors": False
     }
 
     def _init(self, conf: OmegaConf):
@@ -421,7 +423,8 @@ class LineExtractor(BaseModel):
 
         return indices_image
 
-    def _forward(self, data: dict) -> torch.Tensor:
+    def _forward(self, data: dict) -> dict[str, Tensor]:
+        # TODO: Enable batched prediction! As interface changed!
         points = data["points"]
         distance_map = data["distance_map"]
         descriptors = data["descriptors"]
