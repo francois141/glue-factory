@@ -1,14 +1,8 @@
 import os
 from collections import defaultdict
-from pathlib import Path
-from pprint import pprint
 
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
 import torch.utils
 import torch.utils.data
-from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from gluefactory.datasets import get_dataset
@@ -19,7 +13,7 @@ from gluefactory.eval.eval_pipeline import (
     load_eval,
     save_eval,
 )
-from gluefactory.eval.io import get_eval_parser, load_model, parse_eval_args
+from gluefactory.eval.io import load_model
 from gluefactory.models import BaseModel
 from gluefactory.models.cache_loader import CacheLoader
 from gluefactory.models.lines.line_utils import H_estimation
@@ -27,11 +21,12 @@ from gluefactory.models.utils.metrics_lines import (
     compute_loc_error,
     compute_repeatability,
 )
-from gluefactory.settings import EVAL_PATH
+
 from gluefactory.utils.export_predictions import export_predictions
 from gluefactory.utils.tensor import map_tensor
 from gluefactory.visualization.viz2d import plot_images, plot_lines, save_plot
 
+from utils import run_and_save_pipeline
 
 class HPatchesPipeline(EvalPipeline):
     default_conf = {
@@ -248,37 +243,4 @@ class HPatchesPipeline(EvalPipeline):
 
 
 if __name__ == "__main__":
-    dataset_name = Path(__file__).stem
-    parser = get_eval_parser()
-    args = parser.parse_intermixed_args()
-
-    default_conf = OmegaConf.create(HPatchesPipeline.default_conf)
-
-    # mingle paths
-    output_dir = Path(EVAL_PATH, dataset_name)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    name, conf = parse_eval_args(
-        dataset_name,
-        args,
-        "configs/",
-        default_conf,
-    )
-
-    experiment_dir = output_dir / name
-    experiment_dir.mkdir(exist_ok=True)
-
-    pipeline = HPatchesPipeline(conf)
-    s, f, r = pipeline.run(
-        experiment_dir,
-        overwrite=args.overwrite,
-        overwrite_eval=args.overwrite_eval,
-        plot=args.plot,
-    )
-
-    # print results
-    pprint(s)
-    if args.plot:
-        for name, fig in f.items():
-            fig.canvas.manager.set_window_title(name)
-        plt.show()
+    run_and_save_pipeline(HPatchesPipeline)

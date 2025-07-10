@@ -1,5 +1,3 @@
-import numpy as np
-import torch
 from kornia.geometry.homography import find_homography_dlt
 
 from ..geometry.epipolar import generalized_epi_dist, relative_pose_error
@@ -8,6 +6,62 @@ from ..geometry.homography import homography_corner_error, sym_homography_error
 from ..robust_estimators import load_estimator
 from ..utils.tensor import index_batch
 from ..utils.tools import AUCMetric
+
+from pathlib import Path
+from pprint import pprint
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.utils
+import torch.utils.data
+from omegaconf import OmegaConf
+from gluefactory.eval.io import get_eval_parser, parse_eval_args
+from gluefactory.settings import EVAL_PATH
+
+def run_and_save_pipeline(Pipeline):
+    dataset_name = Path(__file__).stem
+    parser = get_eval_parser()
+    args = parser.parse_intermixed_args()
+
+    default_conf = OmegaConf.create(Pipeline.default_conf)
+
+    # mingle paths
+    output_dir = Path(EVAL_PATH, dataset_name)
+    output_dir.mkdir(exist_ok=True, parents=True)
+
+    name, conf = parse_eval_args(
+        dataset_name,
+        args,
+        "configs/",
+        default_conf,
+    )
+
+    experiment_dir = output_dir / name
+
+    # What about this?
+    # if args.checkpoint:
+    #     ckpt_dir = Path(args.checkpoint).parent
+    #     experiment_dir = experiment_dir / ckpt_dir.name
+
+
+    experiment_dir.mkdir(exist_ok=True)
+
+    pipeline = Pipeline(conf)
+    s, f, r = pipeline.run(
+        experiment_dir,
+        overwrite=args.overwrite,
+        overwrite_eval=args.overwrite_eval,
+        plot=args.plot,
+    )
+
+    # print results
+    pprint(s)
+    if args.plot:
+        for name, fig in f.items():
+            fig.canvas.manager.set_window_title(name)
+        plt.show()
+
 
 
 def check_keys_recursive(d, pattern):

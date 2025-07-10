@@ -1,28 +1,24 @@
 from collections import defaultdict
 from collections.abc import Iterable
-from pathlib import Path
-from pprint import pprint
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from ..datasets import get_dataset
 from ..models.cache_loader import CacheLoader
-from ..settings import EVAL_PATH
 from ..utils.export_predictions import export_predictions
 from ..utils.tensor import map_tensor
 from ..utils.tools import AUCMetric
 from ..visualization.viz2d import plot_cumulative
 from .eval_pipeline import EvalPipeline
-from .io import get_eval_parser, load_model, parse_eval_args
+from .io import load_model
 from .utils import (
     eval_homography_dlt,
     eval_homography_robust,
     eval_matches_homography,
     eval_poses,
+    run_and_save_pipeline,
 )
 
 
@@ -170,34 +166,4 @@ class HPatchesPipeline(EvalPipeline):
 
 
 if __name__ == "__main__":
-    dataset_name = Path(__file__).stem
-    parser = get_eval_parser()
-    args = parser.parse_intermixed_args()
-
-    default_conf = OmegaConf.create(HPatchesPipeline.default_conf)
-
-    # mingle paths
-    output_dir = Path(EVAL_PATH, dataset_name)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    name, conf = parse_eval_args(
-        dataset_name,
-        args,
-        "configs/",
-        default_conf,
-    )
-
-    experiment_dir = output_dir / name
-    experiment_dir.mkdir(exist_ok=True)
-
-    pipeline = HPatchesPipeline(conf)
-    s, f, r = pipeline.run(
-        experiment_dir, overwrite=args.overwrite, overwrite_eval=args.overwrite_eval
-    )
-
-    # print results
-    pprint(s)
-    if args.plot:
-        for name, fig in f.items():
-            fig.canvas.manager.set_window_title(name)
-        plt.show()
+    run_and_save_pipeline(HPatchesPipeline)

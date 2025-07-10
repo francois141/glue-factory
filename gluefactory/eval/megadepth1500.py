@@ -2,23 +2,17 @@ import logging
 import zipfile
 from collections import defaultdict
 from collections.abc import Iterable
-from pathlib import Path
-from pprint import pprint
 
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from ..datasets import get_dataset
 from ..models.cache_loader import CacheLoader
-from ..settings import DATA_PATH, EVAL_PATH
+from ..settings import DATA_PATH
 from ..utils.export_predictions import export_predictions
 from ..visualization.viz2d import plot_cumulative
 from .eval_pipeline import EvalPipeline
-from .io import get_eval_parser, load_model, parse_eval_args
-from .utils import eval_matches_epipolar, eval_poses, eval_relative_pose_robust
+from .io import  load_model
+from .utils import run_and_save_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -152,38 +146,4 @@ class MegaDepth1500Pipeline(EvalPipeline):
 
 
 if __name__ == "__main__":
-    from .. import logger  # overwrite the logger
-
-    dataset_name = Path(__file__).stem
-    parser = get_eval_parser()
-    args = parser.parse_intermixed_args()
-
-    default_conf = OmegaConf.create(MegaDepth1500Pipeline.default_conf)
-
-    # mingle paths
-    output_dir = Path(EVAL_PATH, dataset_name)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    name, conf = parse_eval_args(
-        dataset_name,
-        args,
-        "configs/",
-        default_conf,
-    )
-
-    experiment_dir = output_dir / name
-    experiment_dir.mkdir(exist_ok=True)
-
-    pipeline = MegaDepth1500Pipeline(conf)
-    s, f, r = pipeline.run(
-        experiment_dir,
-        overwrite=args.overwrite,
-        overwrite_eval=args.overwrite_eval,
-    )
-
-    pprint(s)
-
-    if args.plot:
-        for name, fig in f.items():
-            fig.canvas.manager.set_window_title(name)
-        plt.show()
+    run_and_save_pipeline(MegaDepth1500Pipeline)

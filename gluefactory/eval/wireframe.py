@@ -1,25 +1,10 @@
 import os
-import pickle
 from collections import defaultdict
-from collections.abc import Iterable
 from pathlib import Path
-from pprint import pprint
-
-import cv2
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from omegaconf import OmegaConf
 from tqdm import tqdm
-
-from gluefactory.utils.desc_evaluation import compute_homography, compute_matching_score
-from gluefactory.utils.kp_evaluation import compute_rep_loc_H
-from gluefactory.utils.ls_evaluation import (
-    compute_loc_error,
-    compute_repeatability,
-    match_segments_to_distance,
-)
 from gluefactory.visualization.viz2d import (
     plot_images,
     plot_keypoints,
@@ -28,24 +13,13 @@ from gluefactory.visualization.viz2d import (
 )
 
 from ..datasets import get_dataset
-from ..datasets.wireframe import get_lines, get_lines_gt
 from ..models.cache_loader import CacheLoader
-from ..settings import EVAL_PATH
 from ..utils.ls_evaluation import get_area_line_dist, get_orth_dist, get_structural_dist
-
-# from ..utils.export_predictions import export_predictions
-from ..utils.tensor import batch_to_device, map_tensor
-from ..utils.tools import AUCMetric
-from ..visualization.viz2d import plot_cumulative
+from ..utils.tensor import batch_to_device
 from .eval_pipeline import EvalPipeline
-from .io import get_eval_parser, load_model, parse_eval_args
-from .utils import (
-    eval_homography_dlt,
-    eval_homography_robust,
-    eval_matches_homography,
-    eval_poses,
-    get_matches_scores,
-)
+from .io import load_model
+
+from .utils import run_and_save_pipeline
 
 # from .ls_evaluation import
 
@@ -273,39 +247,4 @@ class WireframePipeline(EvalPipeline):
 
 
 if __name__ == "__main__":
-    dataset_name = Path(__file__).stem
-    parser = get_eval_parser()
-    args = parser.parse_intermixed_args()
-
-    default_conf = OmegaConf.create(WireframePipeline.default_conf)
-
-    # mingle paths
-    output_dir = Path(EVAL_PATH, dataset_name)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    name, conf = parse_eval_args(
-        dataset_name,
-        args,
-        "configs/",
-        default_conf,
-    )
-
-    experiment_dir = output_dir / name
-
-    if args.checkpoint:
-        ckpt_dir = Path(args.checkpoint).parent
-        experiment_dir = experiment_dir / ckpt_dir.name
-
-    experiment_dir.mkdir(exist_ok=True)
-
-    pipeline = WireframePipeline(conf)
-    s, f, r = pipeline.run(
-        experiment_dir, overwrite=args.overwrite, overwrite_eval=args.overwrite_eval
-    )
-
-    # print results
-    pprint(s)
-    if args.plot:
-        for name, fig in f.items():
-            fig.canvas.manager.set_window_title(name)
-        plt.show()
+    run_and_save_pipeline(WireframePipeline)
