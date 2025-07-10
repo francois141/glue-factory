@@ -1,0 +1,9 @@
+[submodule "other/DeepLSD"]
+	path = other/DeepLSD
+	url = https://github.com/cvg/DeepLSD
+[submodule "other/homography_est"]
+	path = other/homography_est
+	url = https://github.com/rpautrat/homography_est
+[submodule "other/faster_pytlsd"]
+	path = other/faster_pytlsd
+	url = https://github.com/francois141/faster_pytlsd
