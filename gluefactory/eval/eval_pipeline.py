@@ -4,6 +4,9 @@ import h5py
 import numpy as np
 from omegaconf import OmegaConf
 
+from .io import load_model
+from ..utils.export_predictions import export_predictions
+
 
 def load_eval(dir):
     summaries, results = {}, {}
@@ -68,8 +71,18 @@ class EvalPipeline:
         raise NotImplementedError
 
     def get_predictions(self, experiment_dir, model=None, overwrite=False):
-        """Export a prediction file for each eval datapoint"""
-        raise NotImplementedError
+        pred_file = experiment_dir / "predictions.h5"
+        if not pred_file.exists() or overwrite:
+            if model is None:
+                model = load_model(self.conf.model, self.conf.checkpoint)
+            export_predictions(
+                self.get_dataloader(self.conf.data),
+                model,
+                pred_file,
+                keys=self.export_keys,
+                optional_keys=self.optional_export_keys,
+            )
+        return pred_file
 
     def run_eval(self, loader, pred_file):
         """Run the eval on cached predictions"""

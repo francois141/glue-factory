@@ -95,25 +95,6 @@ class HPatchesPipeline(EvalPipeline):
         dataset = get_dataset("hpatches")(data_conf)
         return dataset.get_data_loader("test")
 
-    def get_predictions(
-        self,
-        experiment_dir: Path,
-        model: BaseModel | None = None,
-        overwrite: bool = False,
-    ) -> Path:
-        pred_file = experiment_dir / "predictions.h5"
-        if not pred_file.exists() or overwrite:
-            if model is None:
-                model = load_model(self.conf.model, self.conf.checkpoint)
-            export_predictions(
-                self.get_dataloader(self.conf.data),
-                model,
-                pred_file,
-                keys=self.export_keys,
-                optional_keys=self.optional_export_keys,
-            )
-        return pred_file
-
     def run(
         self,
         experiment_dir: Path,

@@ -7,12 +7,10 @@ from tqdm import tqdm
 
 from ..datasets import get_dataset
 from ..models.cache_loader import CacheLoader
-from ..utils.export_predictions import export_predictions
 from ..utils.tensor import map_tensor
 from ..utils.tools import AUCMetric
 from ..visualization.viz2d import plot_cumulative
 from .eval_pipeline import EvalPipeline
-from .io import load_model
 from .utils import (
     eval_homography_dlt,
     eval_homography_robust,
@@ -65,28 +63,11 @@ class HPatchesPipeline(EvalPipeline):
         "line_matching_scores1",
     ]
 
-    def _init(self, conf):
-        pass
-
     @classmethod
     def get_dataloader(self, data_conf=None):
         data_conf = data_conf if data_conf else self.default_conf["data"]
         dataset = get_dataset("hpatches")(data_conf)
         return dataset.get_data_loader("test")
-
-    def get_predictions(self, experiment_dir, model=None, overwrite=False):
-        pred_file = experiment_dir / "predictions.h5"
-        if not pred_file.exists() or overwrite:
-            if model is None:
-                model = load_model(self.conf.model, self.conf.checkpoint)
-            export_predictions(
-                self.get_dataloader(self.conf.data),
-                model,
-                pred_file,
-                keys=self.export_keys,
-                optional_keys=self.optional_export_keys,
-            )
-        return pred_file
 
     def run_eval(self, loader, pred_file):
         assert pred_file.exists()
