@@ -33,7 +33,8 @@ dependencies = [
     "joblib",
     "lightglue @ git+https://github.com/cvg/LightGlue.git",
     "pytlsd",
-    "timm"
+    "timm",
+    "gdown"
 ]
 urls = {Repository = "https://github.com/cvg/glue-factory"}
 
