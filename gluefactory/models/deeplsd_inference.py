@@ -166,7 +166,7 @@ class DeepLSD(BaseModel):
                 img.astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm,
-                gradangle=angle,
+                gradangle=angle.astype(np.float64),
                 grad_nfa=grad_nfa,
             )[:, :4].reshape(-1, 2, 2)
 
