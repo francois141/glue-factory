@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def sample_homography(
+def sample_homography_deeplsd(
     shape,
     perspective=True,
     scaling=True,
