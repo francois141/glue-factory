@@ -28,9 +28,8 @@ from gluefactory.datasets import get_dataset
 from gluefactory.geometry.homography import sample_homography_corners
 from gluefactory.models.extractors.superpoint import top_k_keypoints
 from gluefactory.models.extractors.superpoint_open import SuperPoint
-from gluefactory.settings import EVAL_PATH
 from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
-
+from gluefactory.settings import EVAL_PATH
 
 class KPExtractor:
     def __init__(self, config):
@@ -242,6 +241,11 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
     h, w = img.shape[:2]
     size = (w, h)
     df_maps = []
+    angles = []
+    counts = []
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (border_margin * 2, border_margin * 2))
+
     with torch.no_grad():
         device="cuda"
         pix_loc = torch.tensor(np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing='ij'),
@@ -261,13 +265,11 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
             H_inv = np.linalg.inv(H)
 
             # Warp the image
-            # warped_img = warp_perspective(torch.tensor(img).to(device)[:,:,0].unsqueeze(0).unsqueeze(0).to(torch.float64), torch.tensor(H).to(device).unsqueeze(0).to(torch.float64), size, mode="bilinear").cpu().numpy()[0,0]
-
             warped_img = cv2.warpPerspective(img, H, size,
                                             borderMode=cv2.BORDER_REPLICATE)
 
             # Regress the DF on the warped image
-            warped_lines = fast_lsd((warped_img * 255).astype(np.uint8))[:, [1, 0, 3, 2]].reshape(-1, 2, 2)
+            warped_lines = lsd((warped_img * 255).astype(np.uint8))[:, [1, 0, 3, 2]].reshape(-1, 2, 2)
 
             # Warp the lines back
             warped_lines = torch.tensor(warped_lines).to(device)
@@ -283,10 +285,17 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
 
             offset = offset[0].permute(1, 2, 0)[:, :, [1, 0]]
 
-            closest = pix_loc + offset
+            # Compute the valid pixels
+            count = cv2.warpPerspective(np.ones_like(img), H_inv, size,
+                                    flags=cv2.INTER_NEAREST)
+            count = cv2.erode(count, kernel)
+            counts.append(count)
 
             df = torch.norm(offset, dim=-1)
             df_maps.append(df)
+
+            angle = torch.remainder(torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi)
+            angles.append(angle)
 
             if is_analysis:
                 new_value = torch.median(torch.stack(df_maps), dim=0).values.cpu().numpy() - previuos
@@ -317,10 +326,24 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
 
         # Compute the median of all DF maps, with counts as weights
         df_maps = torch.stack(df_maps)
-        # Median of the DF
-        avg_df = torch.median(df_maps, dim=0).values.cpu().numpy()
+        angles = torch.stack(angles)
+        counts = torch.tensor(np.stack(counts)).to("cuda")
 
-        return avg_df
+        # Median of the DF
+        df_maps[counts == 0] = torch.nan
+        avg_df = torch.nanmedian(df_maps, dim=0).values.cpu().numpy()
+
+        # Median of the angle
+        circ_bound = (torch.minimum(torch.pi - angles, angles)
+                    * counts).sum(0) / counts.sum(0) < 0.3
+        angles[:, circ_bound] -= torch.where(
+            angles[:, circ_bound] > torch.pi /2,
+            torch.ones_like(angles[:, circ_bound]) * torch.pi,
+            torch.zeros_like(angles[:, circ_bound]))
+        angles[counts == 0] = torch.nan
+        avg_angle = torch.remainder(torch.nanmedian(angles, axis=0).values, torch.pi).cpu().numpy()
+
+        return avg_df, avg_angle
 
 def get_dataset_and_loader(
     num_workers: int, dataset: str, chunk: int
@@ -525,16 +548,21 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8)
 
     # Run homography adaptation
-    df = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
+    df, af = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
 
     max_df_value = np.max(df)
     df = ((df / max_df_value) * 255).astype(np.uint8)
+
+    af = ((af / np.pi) * 255).astype(np.uint8)
 
     with open(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df_max_value.txt", 'w') as f:
         f.write(str(max_df_value))
 
     # Save the image
-    Image.fromarray(df).save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.png", format='PNG')
+    Image.fromarray(df).save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.jpg", format='jpeg')
+
+    # Save the image
+    Image.fromarray(af).save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.jpg", format='jpeg')
 
 def process_both(img_data, num_H, output_folder_path, is_analysis):
     """
@@ -572,7 +600,7 @@ if __name__ == "__main__":
         "dataset", choices=["minidepth", "oxford_paris_mini_100k", "scannet"]
     )
     parser.add_argument(
-        "--type", type=str, help="Choose what to generate [points|lines]", choices=["points", "lines", "both"], default="points"
+        "--type", type=str, help="Choose what to generate [points|lines]", choices=["points", "lines", "both"], default="both"
     )
     parser.add_argument(
         "--output_folder", type=str, help="Output folder.", default="oxparis_100k"
@@ -586,13 +614,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_jobs",
         type=int,
-        default=2,
+        default=1,
         help="Number of jobs (that perform HA) to run in parallel.",
     )
     parser.add_argument(
         "--n_jobs_dataloader",
         type=int,
-        default=2,
+        default=1,
         help="Number of jobs the dataloader uses to load images",
     )
     parser.add_argument('--analysis', action='store_true', help='Analyse max difference between iterations')

@@ -10,7 +10,7 @@ import torch
 from tqdm import tqdm
 
 from gluefactory.datasets import BaseDataset
-from gluefactory.settings import DATA_PATH, root
+from gluefactory.settings import root, DATA_PATH
 from gluefactory.utils.image import ImagePreprocessor, load_image
 
 logger = logging.getLogger(__name__)
@@ -59,15 +59,15 @@ class OxfordParisMini(BaseDataset):
     }
 
     def _init(self, conf):
-        base_path = Path(f"data/oxford_paris_mini/images/{int(self.conf.chunk)}")
+        base_path_path = str(DATA_PATH / "oxford_paris_mini/images/")
+        base_path = Path(f"{base_path_path}/{int(self.conf.chunk)}")
         img_list_path = base_path / "image_list.txt"
         # Download the chunk of the current dataset
         if not base_path.exists():
             self.download_oxford_paris_mini(self.conf.chunk)
-
         # Now we generate the image list on the fly
-        files = [str(p) for p in base_path.rglob('*') if p.is_file()]
-        to_strip = "data/oxford_paris_mini/images/"
+        files = [str(p) for p in base_path.rglob('*.jpg') if p.is_file()]
+        to_strip = base_path_path
         files = [e[len(to_strip):] for e in files]
 
         with open(img_list_path, 'w') as f:  # Truncate mode by default
@@ -76,10 +76,11 @@ class OxfordParisMini(BaseDataset):
 
         # Ensure the file exists
         with open(img_list_path, "r") as f:
-            self.img_list = [file_name.strip("\n") for file_name in f.readlines()]
+            self.img_list = [file_name.strip("\n")[1:] for file_name in f.readlines()]
 
         # load image names
         images = self.img_list
+
         if self.conf.rand_shuffle_seed is not None:
             np.random.RandomState(conf.shuffle_seed).shuffle(images)
         train_images = images[: conf.train_size]
@@ -99,7 +100,7 @@ class OxfordParisMini(BaseDataset):
         part_dir = data_dir / str(part)
         part_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_dir = data_dir.parent / "oxpa_tmp"
+        tmp_dir = data_dir.parent / f"oxpa_tmp_{str(part)}"
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir)
         tmp_dir.mkdir(exist_ok=True, parents=True)
