@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from pytlsd import lsd
-# from faster_pytlsd import lsd as fast_lsd
+from faster_pytlsd import lsd as fast_lsd
 from torch import nn
 
 from gluefactory.models.backbones.vgg_unet import VGGUNet
