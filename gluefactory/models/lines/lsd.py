@@ -26,7 +26,7 @@ class LSD(BaseModel):
     def detect_lines(self, img):
         # Run LSD
         if self.conf.faster_lsd:
-            segs = fast_lsd(img, scale=1.0)
+            segs = fast_lsd(img)
         else:
             segs = lsd(img)
 
