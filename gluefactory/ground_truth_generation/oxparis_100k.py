@@ -512,7 +512,7 @@ def process_points(img_data, num_H, output_folder_path, is_analysis):
     assert len(img_data["name"]) == 1  # Currently expect batch size one!
 
     complete_out_folder = (output_folder_path / str(img_data["name"][0])).parent
-    points_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_heatmap.jpg"
+    points_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_heatmap.npy"
 
     # If we already generated the value for this one, we can ignore it - that way we can transparently restart the workload later
     if points_image_path.exists():
@@ -526,7 +526,7 @@ def process_points(img_data, num_H, output_folder_path, is_analysis):
 
     # Then generate the dataset with homography adapataion
     superpoint_heatmap = ha_forward_points(image_u8, is_analysis, num=num_H).cpu()
-    Image.fromarray((superpoint_heatmap.cpu().numpy() * 255).astype(np.uint8)).save(points_image_path, format='JPEG')
+    np.save(points_image_path, superpoint_heatmap.cpu().numpy())
 
 def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     """
@@ -535,7 +535,7 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     assert len(img_data["name"]) == 1  # Currently expect batch size one!
 
     complete_out_folder = (output_folder_path / str(img_data["name"][0])).parent
-    lines_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.jpg"
+    lines_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy"
 
     # If we already generated the value for this one, we can ignore it - that way we can transparently restart the workload later
     if lines_image_path.exists():
@@ -550,19 +550,11 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     # Run homography adaptation
     df, af = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
 
-    max_df_value = np.max(df)
-    df = ((df / max_df_value) * 255).astype(np.uint8)
+    # Save the distance field
+    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy", df)
 
-    af = ((af / np.pi) * 255).astype(np.uint8)
-
-    with open(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df_max_value.txt", 'w') as f:
-        f.write(str(max_df_value))
-
-    # Save the image
-    Image.fromarray(df).save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.jpg", format='jpeg')
-
-    # Save the image
-    Image.fromarray(af).save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.jpg", format='jpeg')
+    # Save the angle field
+    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.npy", af)
 
 def process_both(img_data, num_H, output_folder_path, is_analysis):
     """
