@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import time
 from joblib import Parallel, delayed
 from pytlsd import lsd
 from faster_pytlsd import lsd as fast_lsd
@@ -22,13 +23,16 @@ class LSD(BaseModel):
             assert (
                 self.conf.max_num_lines is not None
             ), "Missing max_num_lines parameter"
-
     def detect_lines(self, img):
+        start = time.perf_counter()
         # Run LSD
         if self.conf.faster_lsd:
             segs = fast_lsd(img)
         else:
             segs = lsd(img)
+        end = time.perf_counter()
+        # Convert latency in milliseconds
+        latency = (end - start) * 1_000
 
         # Filter out keylines that do not meet the minimum length criteria
         lengths = np.linalg.norm(segs[:, 2:4] - segs[:, 0:2], axis=1)
@@ -55,7 +59,7 @@ class LSD(BaseModel):
             scores = np.concatenate([scores, np.zeros(pad, dtype=np.float32)], axis=0)
             valid_mask = np.concatenate([valid_mask, np.zeros(pad, dtype=bool)], axis=0)
 
-        return segs, scores, valid_mask
+        return segs, scores, valid_mask, latency
 
     def _forward(self, data):
         # Convert to the right data format
@@ -70,12 +74,13 @@ class LSD(BaseModel):
 
         # LSD detection in parallel
         if b_size == 1:
-            lines, line_scores, valid_lines = self.detect_lines(image[0])
+            lines, line_scores, valid_lines, latencies = self.detect_lines(image[0])
             lines = [lines]
             line_scores = [line_scores]
             valid_lines = [valid_lines]
+            latencies = [latencies]
         else:
-            lines, line_scores, valid_lines = zip(
+            lines, line_scores, valid_lines, latencies = zip(
                 *Parallel(n_jobs=self.conf.n_jobs)(
                     delayed(self.detect_lines)(img) for img in image
                 )
@@ -87,7 +92,7 @@ class LSD(BaseModel):
             line_scores = torch.tensor(line_scores, dtype=torch.float, device=device)
             valid_lines = torch.tensor(valid_lines, dtype=torch.bool, device=device)
 
-        return {"lines": lines, "line_scores": line_scores, "valid_lines": valid_lines}
+        return {"lines": lines, "line_scores": line_scores, "valid_lines": valid_lines, "latencies": latencies}
 
     def loss(self, pred, data):
         raise NotImplementedError
