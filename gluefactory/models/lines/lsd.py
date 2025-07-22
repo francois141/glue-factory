@@ -1,8 +1,8 @@
 import numpy as np
 import torch
+from faster_pytlsd import lsd as fast_lsd
 from joblib import Parallel, delayed
 from pytlsd import lsd
-from faster_pytlsd import lsd as fast_lsd
 
 from ..base_model import BaseModel
 

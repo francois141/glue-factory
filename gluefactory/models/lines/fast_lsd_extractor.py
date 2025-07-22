@@ -2,11 +2,12 @@ from typing import Optional
 
 import numpy as np
 import torch
-from pytlsd import lsd
 from faster_pytlsd import lsd as fast_lsd
-from gluefactory.utils.image import compute_image_grad
+from pytlsd import lsd
+
 from gluefactory.models.lines.line_refinement import filter_outlier_lines, merge_lines
 from gluefactory.models.lines.line_utils import preprocess_angle
+from gluefactory.utils.image import compute_image_grad
 
 from ..base_model import BaseModel
 
@@ -15,12 +16,13 @@ class FastLSDLineExtractor(BaseModel):
     """
     This is meant to be a simple wrapper to use LSD or fast LSD in the JPL pipeline (joint_point_line_extractor.py)
     """
+
     default_conf = {
         "name": "lines.fast_lsd_extractor",
         "min_length": 15,
         "max_num_lines": None,
         "force_num_lines": False,
-        "use_img_grad_angle": True, # Dont use the angle-field but use the image gradient as surrogate
+        "use_img_grad_angle": True,  # Dont use the angle-field but use the image gradient as surrogate
         "merge": False,
         "grad_nfa": True,
         "filtering": "normal",
@@ -38,9 +40,13 @@ class FastLSDLineExtractor(BaseModel):
             ), "Missing max_num_lines parameter"
         # currently line descriptors arte not implemented
         if self.conf.return_line_descriptors:
-            raise NotImplementedError("Line descriptors are not implemented yet for FasterLSD")
+            raise NotImplementedError(
+                "Line descriptors are not implemented yet for FasterLSD"
+            )
 
-    def detect_lines(self, img: np.array , df: np.array , line_level: Optional[np.array] = None) -> np.array:
+    def detect_lines(
+        self, img: np.array, df: np.array, line_level: Optional[np.array] = None
+    ) -> np.array:
         """
         detect lines in one image.
         Args:
@@ -111,7 +117,9 @@ class FastLSDLineExtractor(BaseModel):
             lines = lines[indices]
 
         if self.conf.merge:
-            lines = merge_lines(torch.from_numpy(lines), thresh=4, overlap_thresh=0).numpy()
+            lines = merge_lines(
+                torch.from_numpy(lines), thresh=4, overlap_thresh=0
+            ).numpy()
 
         # Pad if necessary
         n = len(lines)
@@ -146,9 +154,7 @@ class FastLSDLineExtractor(BaseModel):
         # applied to enable batching via conf.force_num_lines
         valid_lines = []
         for img, df, ll in zip(np_img, np_df, np_ll):
-            line_pred = self.detect_lines(
-                img, df, ll
-            )
+            line_pred = self.detect_lines(img, df, ll)
             lines.append(torch.Tensor(line_pred["lines"]))
             valid_lines.append(torch.Tensor(line_pred["valid_lines"]))
         # Here a list of lines for each img is returned.

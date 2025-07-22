@@ -5,8 +5,8 @@ Regress the distance function map to all the line segments of an image.
 import numpy as np
 import torch
 import torch.nn.functional as F
-from pytlsd import lsd
 from faster_pytlsd import lsd as fast_lsd
+from pytlsd import lsd
 from torch import nn
 
 from gluefactory.models.backbones.vgg_unet import VGGUNet
@@ -194,7 +194,9 @@ class DeepLSD(BaseModel):
 
         # Merge close-by lines together
         if merge:
-            lines = merge_lines(torch.from_numpy(lines), thresh=4, overlap_thresh=0).numpy()
+            lines = merge_lines(
+                torch.from_numpy(lines), thresh=4, overlap_thresh=0
+            ).numpy()
 
         return lines
 

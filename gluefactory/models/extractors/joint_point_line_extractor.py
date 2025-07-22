@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -75,14 +74,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
                 "gt_aliked_model": "aliked-n32",
-                "use_one_view_loss": True, # In one view training can decide if train descriptors with this flag
-                "use_two_view_loss": True, # can only be used if two_view training activated (sparseNRE loss)
+                "use_one_view_loss": True,  # In one view training can decide if train descriptors with this flag
+                "use_two_view_loss": True,  # can only be used if two_view training activated (sparseNRE loss)
             },
             "loss": {
-                "use_one_view_df_loss": True, # one-view losses can be applied any time
-                "use_one_view_af_loss": True, # af loss is only applied if af-use is activated
-                "use_two_view_df_loss": True, # two view losses are only applied if two-view training activated
-                "use_one_view_kp_loss": True, # use one-view keypoint loss ex. focal, l1 etc
+                "use_one_view_df_loss": True,  # one-view losses can be applied any time
+                "use_one_view_af_loss": True,  # af loss is only applied if af-use is activated
+                "use_two_view_df_loss": True,  # two view losses are only applied if two-view training activated
+                "use_one_view_kp_loss": True,  # use one-view keypoint loss ex. focal, l1 etc
                 "kp_loss_name": "focal_loss",  # other options: bce, weighted_bce or focal loss
                 "kp_loss_parameters": {
                     "lambda_weighted_bce": 200,  # weighted bce parameter factor how to boost keypoint loss in map
@@ -98,7 +97,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     "keypoint_weight": 1,
                     "one_view_descriptor_weight": 1,
                     "two_view_descriptor_weight": 1,
-                    "softargmax_weight": 1, # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
+                    "softargmax_weight": 1,  # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
                 },
             },
         },
@@ -229,10 +228,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.load_pretrained_aliked_elements()
 
         # Initialize Lightweight ALIKED model to perform on-the-fly ground-truth generation for descriptors if training in one-view setting
-        if (
-            conf.training.do
-            and conf.training.train_descriptors.use_one_view_loss
-        ):
+        if conf.training.do and conf.training.train_descriptors.use_one_view_loss:
             logger.warning("Load ALiked Lightweight model for descriptor training...")
             aliked_gt_cfg = {
                 "model_name": self.conf.training.train_descriptors.gt_aliked_model,
@@ -263,7 +259,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             # Extract from two-view
             chkpt_statedict["model"] = {
-                k.split("extractor.")[-1]: v for k, v in chkpt_statedict["model"].items()
+                k.split("extractor.")[-1]: v
+                for k, v in chkpt_statedict["model"].items()
             }
 
             # remove mlp weights from line detection
@@ -287,14 +284,17 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
             # Extract from two-view
             chkpt_statedict["model"] = {
-                k.split("extractor.")[-1]: v for k, v in chkpt_statedict["model"].items()
+                k.split("extractor.")[-1]: v
+                for k, v in chkpt_statedict["model"].items()
             }
             self.load_state_dict(chkpt_statedict["model"], strict=False)
 
         # Load line extractor and import line metrics if line detection is used
         if self.conf.line_detection.do:
             logger.info(f"Load line extractor: {self.conf.line_detection.name}")
-            self.line_extractor = get_model(self.conf.line_detection.name)(self.conf.line_detection.conf)
+            self.line_extractor = get_model(self.conf.line_detection.name)(
+                self.conf.line_detection.conf
+            )
 
         # only load deeplsd model if we perform ablation or development
         if self.conf.line_detection.do and (
@@ -437,7 +437,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.timings["keypoint-detection"].append(sync_and_time() - start_keypoints)
 
         # raw output of DKD needed to generate GT-Descriptors (ONLY done if one-view-loss used)
-        if self.conf.training.do and self.conf.training.train_descriptors.use_one_view_loss:
+        if (
+            self.conf.training.do
+            and self.conf.training.train_descriptors.use_one_view_loss
+        ):
             output["keypoints_raw"] = keypoints
 
         _, _, h, w = image.shape
@@ -461,9 +464,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
-        if (
-            self.conf.line_detection.do and not self.training
-        ):
+        if self.conf.line_detection.do and not self.training:
             if self.conf.timeit:
                 start_lines = sync_and_time()
 
@@ -483,7 +484,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
             if self.conf.line_detection.conf.return_line_descriptors:
-                output["line_descriptors"] = torch.stack(pred_line_data["line_descriptors"], dim=0)
+                output["line_descriptors"] = torch.stack(
+                    pred_line_data["line_descriptors"], dim=0
+                )
             output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
 
             # Use aliked points sampled from inbetween Line endpoints?
@@ -547,7 +550,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         warped_dfs = []
 
         for i in range(df.shape[0]):
-            with torch.no_grad(): # TODO: could be batched or made simpler to warp the distance field?
+            with torch.no_grad():  # TODO: could be batched or made simpler to warp the distance field?
                 offset = df[i][:, :, None] * torch.stack(
                     [torch.sin(angle[i]), torch.cos(angle[i])], dim=-1
                 )
@@ -608,16 +611,28 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Load view0 ground truth if two view
         gt_dict_view0 = data["view0"]["cache"] if self.conf.training.two_view else data
         gt_dict_view1 = data["view1"]["cache"] if self.conf.training.two_view else None
-        H = data["H_0to1"] if self.conf.training.two_view else None # for each sample in batch there is a separate homography
-        H_inv = torch.linalg.inv(H) if self.conf.training.two_view else None# inv calc supports batch of matrix
+        H = (
+            data["H_0to1"] if self.conf.training.two_view else None
+        )  # for each sample in batch there is a separate homography
+        H_inv = (
+            torch.linalg.inv(H) if self.conf.training.two_view else None
+        )  # inv calc supports batch of matrix
 
         img = data["view0"]["image"] if self.conf.training.two_view else data["image"]
         # define padding mask which is only ones if no padding is used -> makes loss compatible with any scaling technique and whether padding is used or not
-        padding_mask_view0 = gt_dict_view0.get("padding_mask", torch.ones_like(img))[ # TODO: padding is not the same
+        padding_mask_view0 = gt_dict_view0.get(
+            "padding_mask", torch.ones_like(img)
+        )[  # TODO: padding is not the same
             :, 0, :, :
         ].int()
-        df_gt_mask_view0 = gt_dict_view0["deeplsd_distance_field"] < self.conf.line_neighborhood
-        df_gt_mask_view1 = gt_dict_view1["deeplsd_distance_field"] < self.conf.line_neighborhood if self.conf.training.two_view else None
+        df_gt_mask_view0 = (
+            gt_dict_view0["deeplsd_distance_field"] < self.conf.line_neighborhood
+        )
+        df_gt_mask_view1 = (
+            gt_dict_view1["deeplsd_distance_field"] < self.conf.line_neighborhood
+            if self.conf.training.two_view
+            else None
+        )
 
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
@@ -626,7 +641,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 gt_dict_view0["superpoint_heatmap"] * padding_mask_view0,
             ).mean(dim=(1, 2))
             losses["one_view_kp_scoremap"] = keypoint_scoremap_loss
-            losses["total"] += self.conf.training.loss.loss_weights.keypoint_weight * keypoint_scoremap_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.keypoint_weight
+                * keypoint_scoremap_loss
+            )
 
         # If training descriptors: decide between one-view and two-view node
         if self.conf.training.train_descriptors.use_one_view_loss:
@@ -646,27 +664,39 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 reduction="none",
             ).mean(dim=(1, 2))
             losses["one_view_kp_descriptors"] = keypoint_descriptor_loss
-            losses["total"] += self.conf.training.loss.loss_weights.one_view_descriptor_weight * keypoint_descriptor_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.one_view_descriptor_weight
+                * keypoint_descriptor_loss
+            )
 
         # Calculate two view loss (Sparse NRE for descriptors if wanted)
-        if self.conf.training.train_descriptors.use_two_view_loss and self.conf.training.two_view:
+        if (
+            self.conf.training.train_descriptors.use_two_view_loss
+            and self.conf.training.two_view
+        ):
             # Two Way sparse NRE computation
 
             # best match in kp of A - for each kp projected from B to A
             matches_B_to_A = compute_matches(
-                prediction_dict["keypoints"], prediction_dict["keypoints1"], H, best_match_only=True
+                prediction_dict["keypoints"],
+                prediction_dict["keypoints1"],
+                H,
+                best_match_only=True,
             )
 
             # best match in kp of B - for each kp projected from A to B
             matches_A_to_B = compute_matches(
-                prediction_dict["keypoints1"], prediction_dict["keypoints"], H_inv, best_match_only=True
+                prediction_dict["keypoints1"],
+                prediction_dict["keypoints"],
+                H_inv,
+                best_match_only=True,
             )
 
             # returns overall mean scalar, need to repeat on batch dim for total loss.
             keypoint_descriptor_lossBA = sparse_nre_loss(
-                prediction_dict["descriptors"], # (B, N_A, Dim)
-                prediction_dict["descriptors1"], # (B, N_B, Dim)
-                matches_B_to_A, # (M, 3)
+                prediction_dict["descriptors"],  # (B, N_A, Dim)
+                prediction_dict["descriptors1"],  # (B, N_B, Dim)
+                matches_B_to_A,  # (M, 3)
             )
 
             # returns overall mean scalar, need to repeat on batch dim for total loss.
@@ -678,13 +708,19 @@ class JointPointLineDetectorDescriptor(BaseModel):
             overall_mean = (keypoint_descriptor_lossBA + keypoint_descriptor_lossAB) / 2
             # repeat mean loss across batch dimension to have same mean later on consolidation
             losses["two_view_kp_descriptors"] = overall_mean.repeat(img.shape[0])
-            losses["total"] += self.conf.training.loss.loss_weights.two_view_descriptor_weight * losses["two_view_kp_descriptors"]
-
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.two_view_descriptor_weight
+                * losses["two_view_kp_descriptors"]
+            )
 
         # use angular loss for anglefield, only if use of af is activated
-        if self.conf.use_line_anglefield and self.conf.training.loss.use_one_view_af_loss:
+        if (
+            self.conf.use_line_anglefield
+            and self.conf.training.loss.use_one_view_af_loss
+        ):
             af_diff = (
-                gt_dict_view0["deeplsd_angle_field"] - prediction_dict["line_anglefield"]
+                gt_dict_view0["deeplsd_angle_field"]
+                - prediction_dict["line_anglefield"]
             )
             line_af_loss = (
                 torch.minimum(af_diff**2, (torch.pi - af_diff.abs()) ** 2)
@@ -693,13 +729,18 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 dim=(1, 2)
             )  # pixelwise minimum
             losses["one_view_line_af"] = line_af_loss
-            losses["total"] += self.conf.training.loss.loss_weights.one_view_line_af_weight * line_af_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.one_view_line_af_weight
+                * line_af_loss
+            )
 
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
             line_df_loss = F.l1_loss(
-                self.normalize_df(prediction_dict["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0,
+                self.normalize_df(prediction_dict["line_distancefield"])
+                * df_gt_mask_view0
+                * padding_mask_view0,
                 self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
                 * df_gt_mask_view0
                 * padding_mask_view0,
@@ -707,7 +748,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 reduction="none",
             ).mean(dim=(1, 2))
             losses["one_view_line_df"] = line_df_loss
-            losses["total"] += self.conf.training.loss.loss_weights.one_view_line_df_weight * line_df_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.one_view_line_df_weight
+                * line_df_loss
+            )
 
         # Two view df consistency loss
         if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
@@ -729,11 +773,19 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 mode="nearest",
             ).squeeze(1)
 
-            loss_1to0 = F.l1_loss( # TODO: use df-gt-mask in two-view consistency loss? (could introduce bias)
-                self.normalize_df(prediction_dict["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
-                self.normalize_df(warped_df_1_to_0) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
+            loss_1to0 = F.l1_loss(  # TODO: use df-gt-mask in two-view consistency loss? (could introduce bias)
+                self.normalize_df(prediction_dict["line_distancefield"])
+                * df_gt_mask_view0
+                * padding_mask_view0
+                * valid_mask_1_to_0,
+                self.normalize_df(warped_df_1_to_0)
+                * df_gt_mask_view0
+                * padding_mask_view0
+                * valid_mask_1_to_0,
                 reduction="none",
-            ).mean(dim=(1, 2))
+            ).mean(
+                dim=(1, 2)
+            )
 
             # img0 to img1
             warped_df_0to1 = self.warp_data(
@@ -754,14 +806,22 @@ class JointPointLineDetectorDescriptor(BaseModel):
             ).squeeze(1)
             # compute loss
             loss_0to1 = F.l1_loss(
-                self.normalize_df(prediction_dict["line_distancefield1"]) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
-                self.normalize_df(warped_df_0to1) * df_gt_mask_view1 * padding_mask_view0 * valid_mask_0to1,
+                self.normalize_df(prediction_dict["line_distancefield1"])
+                * df_gt_mask_view1
+                * padding_mask_view0
+                * valid_mask_0to1,
+                self.normalize_df(warped_df_0to1)
+                * df_gt_mask_view1
+                * padding_mask_view0
+                * valid_mask_0to1,
                 reduction="none",
             ).mean(dim=(1, 2))
 
             losses["two_view_line_df"] = (loss_0to1 + loss_1to0) / 2
-            losses["total"] += self.conf.training.loss.loss_weights.two_view_line_df_weight * losses["two_view_line_df"]
-
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.two_view_line_df_weight
+                * losses["two_view_line_df"]
+            )
 
         # soft argmax loss (Only applicable with two-view pipeline)
         if (
@@ -778,7 +838,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 self.conf.training.loss.refinement_radius,
             )
             losses["soft_argmax_kp_loss"] = loc_loss
-            losses["total"] += self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
+            )
 
         # add metrics if in validation mode
         if not self.training:
@@ -957,7 +1019,7 @@ def compute_matches(
     keypoints_imB: torch.Tensor,
     H: torch.Tensor,
     matching_threshold: float = 3.0,
-    best_match_only: bool = False
+    best_match_only: bool = False,
 ) -> torch.Tensor:
     """
     Projects keypoints from image B to image A using a homography matrix H.
@@ -972,7 +1034,7 @@ def compute_matches(
         Tensor: (M, 3) where M is the number of matches (0 or 1 for best match). Each row (batch_idx, keypoint_idx_imA, keypoint_idx_imB)
     """
     # Warp detected Kp from Image B to Image A
-    warped_points = warp_points_torch(keypoints_imB, H, inverse=True) # (B, N_B, 2)
+    warped_points = warp_points_torch(keypoints_imB, H, inverse=True)  # (B, N_B, 2)
     # Compute distance for each warped point p_BA to all points P_A
     # keypoints_imA[:, :, None, :] -> (B, N_A, 1, 2)
     # warped_points[:, None, :, :] -> (B, 1, N_B, 2)
@@ -980,23 +1042,29 @@ def compute_matches(
     # After norm computation -> (B, N_A, N_B)
     dists = torch.linalg.norm(
         keypoints_imA[:, :, None, :] - warped_points[:, None, :, :], axis=-1
-    ) # (B, N_A, N_BA)
+    )  # (B, N_A, N_BA)
 
     if best_match_only:
         # For each keypoint in B, find the closest keypoint in A
-        min_dists, best_matches_A = torch.min(dists, dim=1)  # both (B, N_B) idx + value of best match
+        min_dists, best_matches_A = torch.min(
+            dists, dim=1
+        )  # both (B, N_B) idx + value of best match
         valid_matches = min_dists < matching_threshold  # (B, N_B)
 
         # Get batch indices, and kp indices, of kp in B and corresponding kp indices in imA indices
-        batch_idx, idx_B = torch.where(valid_matches) # both: (M,) where M = number of valid matches (here its only 0 or 1)
-        idx_A = best_matches_A[batch_idx, idx_B] # (M,)
+        batch_idx, idx_B = torch.where(
+            valid_matches
+        )  # both: (M,) where M = number of valid matches (here its only 0 or 1)
+        idx_A = best_matches_A[batch_idx, idx_B]  # (M,)
 
         matches = torch.stack([batch_idx, idx_A, idx_B], dim=1)
     else:
-        batch_idx, idx_A, idx_B = torch.where(dists < matching_threshold) # all: (M,), M=num-matches
-        matches = torch.stack([batch_idx, idx_A, idx_B], dim=1) # (M, 3)
+        batch_idx, idx_A, idx_B = torch.where(
+            dists < matching_threshold
+        )  # all: (M,), M=num-matches
+        matches = torch.stack([batch_idx, idx_A, idx_B], dim=1)  # (M, 3)
 
-    return matches # (M, 3)
+    return matches  # (M, 3)
 
 
 def sparse_nre_loss(
@@ -1042,7 +1110,9 @@ def sparse_nre_loss(
     desc1_expanded = desc1_matched.unsqueeze(1)  # (M, 1, D)
 
     # Compute similarities: (M, 1, D) @ (M, D, N2) -> (M, 1, N2)
-    similarities = torch.bmm(desc1_expanded, desc2_expanded.transpose(-2, -1))  # (M, 1, N2)
+    similarities = torch.bmm(
+        desc1_expanded, desc2_expanded.transpose(-2, -1)
+    )  # (M, 1, N2)
     similarities = similarities.squeeze(1)  # (M, N2)
 
     # Subtract 1 and apply temperature scaling, then apply softmax along N2 dimension
