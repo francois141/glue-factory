@@ -261,6 +261,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     conf.checkpoint, map_location="cpu"
                 )
 
+            # Extract from two-view
+            chkpt_statedict["model"] = {
+                k.split("extractor.")[-1]: v for k, v in chkpt_statedict["model"].items()
+            }
+
             # remove mlp weights from line detection
             chkpt_statedict["model"] = {
                 k: v for k, v in chkpt_statedict["model"].items() if not ("mlp" in k)
@@ -280,6 +285,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             chkpt_statedict = torch.hub.load_state_dict_from_url(
                 conf.checkpoint, map_location=torch.device("cpu")
             )
+            # Extract from two-view
+            chkpt_statedict["model"] = {
+                k.split("extractor.")[-1]: v for k, v in chkpt_statedict["model"].items()
+            }
             self.load_state_dict(chkpt_statedict["model"], strict=False)
 
         # Load line extractor and import line metrics if line detection is used
@@ -604,7 +613,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         img = data["view0"]["image"] if self.conf.training.two_view else data["image"]
         # define padding mask which is only ones if no padding is used -> makes loss compatible with any scaling technique and whether padding is used or not
-        padding_mask_view0 = gt_dict_view0.get("padding_mask", torch.ones_like(img))[ # padding should be the same for both views
+        padding_mask_view0 = gt_dict_view0.get("padding_mask", torch.ones_like(img))[ # TODO: padding is not the same
             :, 0, :, :
         ].int()
         df_gt_mask_view0 = gt_dict_view0["deeplsd_distance_field"] < self.conf.line_neighborhood
@@ -720,7 +729,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 mode="nearest",
             ).squeeze(1)
 
-            loss_1to0 = F.l1_loss(
+            loss_1to0 = F.l1_loss( # TODO: use df-gt-mask in two-view consistency loss? (could introduce bias)
                 self.normalize_df(prediction_dict["line_distancefield"]) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
                 self.normalize_df(warped_df_1_to_0) * df_gt_mask_view0 * padding_mask_view0 * valid_mask_1_to_0,
                 reduction="none",
