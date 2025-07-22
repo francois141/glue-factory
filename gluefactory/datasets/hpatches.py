@@ -4,10 +4,7 @@ Simply load images from a folder or nested folders (does not have any split).
 
 import argparse
 import logging
-import tarfile
-import gdown
 import zipfile
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -57,7 +54,7 @@ class HPatches(BaseDataset, torch.utils.data.Dataset):
         "v_astronautis",
         "v_talent",
     )
-    url = "http://icvl.ee.ic.ac.uk/vbalnt/hpatches/hpatches-sequences-release.tar.gz"
+    url = "https://huggingface.co/datasets/vbalnt/hpatches/resolve/main/hpatches-sequences-release.zip"  # noqa: E501
 
     def _init(self, conf):
         assert conf.batch_size == 1
@@ -82,13 +79,13 @@ class HPatches(BaseDataset, torch.utils.data.Dataset):
     def download(self):
         data_dir = self.root.parent
         data_dir.mkdir(exist_ok=True, parents=True)
-        download_path = data_dir / self.url.rsplit("/", 1)[-1]
-        download_path.parent.mkdir(parents=True, exist_ok=True)
-        gdown.download('https://drive.google.com/uc?id=1QprcbYo4oDMQZvctm7KPv55yGmFPsmss', str(download_path), quiet=False,  fuzzy=True )
-        with zipfile.ZipFile(download_path, 'r') as zip_ref:
-            zip_ref.extractall(path=data_dir)
-        os.remove(download_path)
-
+        zip_path = data_dir / self.url.rsplit("/", 1)[-1]
+        torch.hub.download_url_to_file(self.url, zip_path)
+        # Open the ZIP file
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            # Extract all contents to a directory
+            zip_ref.extractall(data_dir)
+        zip_path.unlink()  # Remove the zip file after extraction
 
     def get_dataset(self, split):
         assert split in ["val", "test"]

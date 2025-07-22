@@ -11,3 +11,6 @@ data_root = Path(f"/cluster/scratch/{os.environ['USER']}/") if is_euler_cluster(
 DATA_PATH = data_root / "data"  # datasets and pretrained weights
 TRAINING_PATH = data_root / "outputs/training/"  # training checkpoints
 EVAL_PATH = data_root / "outputs/results/"  # evaluation results
+THIRD_PARTY_PATH = data_root / "third_party/"  # third-party libraries
+
+ALLOW_PICKLE = False  # allow pickle (e.g. in torch.load)

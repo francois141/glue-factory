@@ -13,3 +13,5 @@ __pycache__
 *.hdf5
 image_list100.txt
 /myenv/
+
+checkpoints
