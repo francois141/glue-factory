@@ -4,6 +4,7 @@ import time
 from joblib import Parallel, delayed
 from pytlsd import lsd
 from faster_pytlsd import lsd as fast_lsd
+from faster_pytlsd import params_lsd
 
 from ..base_model import BaseModel
 
@@ -26,6 +27,16 @@ class LSD(BaseModel):
     def detect_lines(self, img):
         start = time.perf_counter()
         # Run LSD
+        if self.conf.search:
+            segs = params_lsd(
+                img,
+                scale=self.conf.scale,
+                sigma_scale=self.conf.sigma_scale,
+                density_th=0.0,
+                quant=self.conf.quant,
+                ang_th=self.conf.angle_th,
+                with_gaussian=self.conf.with_gaussian
+            )
         if self.conf.faster_lsd:
             segs = fast_lsd(img)
         else:
