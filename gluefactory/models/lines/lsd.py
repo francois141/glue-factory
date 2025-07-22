@@ -27,7 +27,7 @@ class LSD(BaseModel):
     def detect_lines(self, img):
         start = time.perf_counter()
         # Run LSD
-        if self.conf.search:
+        if 'search' in self.conf and self.conf.search:
             segs = params_lsd(
                 img,
                 scale=self.conf.scale,

@@ -9,13 +9,12 @@ import torch.nn.functional as F
 from kornia.geometry.transform import warp_perspective
 from omegaconf import OmegaConf
 
-from gluefactory.datasets.homographies_deeplsd import sample_homography
+from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.models import get_model
 from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_cfgs
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
-from gluefactory.models.lines.pold2_extractor import LineExtractor
 from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
 from gluefactory.models.utils.metrics_points import (
     compute_loc_error,
@@ -92,7 +91,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # TODO: Replace with faster_LSD
         "line_detection": {  # by default we use the POLD2 Line Extractor (MLP with Angle Field)
             "do": True,
-            "conf": LineExtractor.default_conf,
             # following options only used for ablations
             "use_deeplsd_kp": False,  # whether we should use DeepLSD line endpoints as junction candidates. Otherwise use JPLDD keypoints
             "use_deeplsd_df_af": False,  # whether we should use Distance and Angle Field from JPLDD or DeepLSD
@@ -241,12 +239,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
             self.load_state_dict(chkpt_statedict["model"], strict=False)
 
-        # Load line extractor and import line metrics if line detection is used
-        if self.conf.line_detection.do:
-
-            self.line_extractor = LineExtractor(
-                self.conf.line_detection.conf,
-            )
 
         # only load deeplsd model if we perform ablation or development
         if self.conf.line_detection.do and (
@@ -739,7 +731,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         Hs = torch.empty((batch_size, 3, 3), dtype=torch.float, device=device)
         for i in range(batch_size):
             H = torch.tensor(
-                sample_homography(data_shape, **default_H_params),
+                sample_homography_deeplsd(data_shape, **default_H_params),
                 dtype=torch.float,
                 device=device,
             )

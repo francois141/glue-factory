@@ -299,7 +299,7 @@ if __name__ == "__main__":
     quant_params = [1.5, 2.0, 2.5]
     angle_th_params = [20,22.5,25]
 
-    test = True
+    test = False
     if test:
         with_gaussian_params = [True]
         scale_params = [0.8]
