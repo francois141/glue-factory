@@ -37,7 +37,7 @@ class LSD(BaseModel):
                 ang_th=self.conf.angle_th,
                 with_gaussian=self.conf.with_gaussian
             )
-        if self.conf.faster_lsd:
+        elif self.conf.faster_lsd:
             segs = fast_lsd(img)
         else:
             segs = lsd(img)

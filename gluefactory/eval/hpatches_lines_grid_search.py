@@ -2,7 +2,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from pprint import pprint
-import itertools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -10,6 +10,7 @@ import torch.utils
 import torch.utils.data
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import itertools
 import copy
 
 from gluefactory.datasets import get_dataset
@@ -33,13 +34,6 @@ from gluefactory.utils.export_predictions import export_predictions
 from gluefactory.utils.tensor import map_tensor
 from gluefactory.visualization.viz2d import plot_images, plot_lines, save_plot
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections import defaultdict
-from tqdm import tqdm
-import numpy as np
-import torch
-import os
-import matplotlib.pyplot as plt
 
 class HPatchesPipeline(EvalPipeline):
     default_conf = {
@@ -150,24 +144,34 @@ class HPatchesPipeline(EvalPipeline):
         s, r = load_eval(experiment_dir)
         return s, f, r
 
-
-    def run_eval(self, loader: torch.utils.data.DataLoader, pred_file: Path, plot: bool):
+    def run_eval(
+        self, loader: torch.utils.data.DataLoader, pred_file: Path, plot: bool
+    ):
         assert pred_file.exists()
         results = defaultdict(list)
+
         cache_loader = CacheLoader({"path": str(pred_file), "collate": None}).eval()
-
-        def evaluate_sample(i, data):
+        for i, data in enumerate(tqdm(loader)):
+            # if i in range(360,365):
+            #     continue
             pred = cache_loader(data)
+            # Remove batch dimension
             data = map_tensor(data, lambda t: torch.squeeze(t, dim=0))
-            results_i = {
-                "names": data["name"][0],
-                "scenes": data["scene"][0],
-            }
+            # add custom evaluations here
 
-            # Compute H_err
-            segs1, segs2 = pred["lines0"], pred["lines1"]
-            matched_idx1 = pred["line_matches0"].to(torch.int64)
-            matched_idx2 = pred["line_matches1"].to(torch.int64)
+            results_i = {}
+
+            # we also store the names for later reference
+            results_i["names"] = data["name"][0]
+            results_i["scenes"] = data["scene"][0]
+
+            # compute H_err
+            segs1, segs2, matched_idx1, matched_idx2 = (
+                pred["lines0"],
+                pred["lines1"],
+                pred["line_matches0"].to(torch.int64),
+                pred["line_matches1"].to(torch.int64),
+            )
 
             H = data["H_0to1"].cpu().numpy()
 
@@ -185,7 +189,7 @@ class HPatchesPipeline(EvalPipeline):
                         reproj_thresh=thresh,
                     )[0]
 
-            # Repeatability and localization error
+            # compute repeatability and loc_error
             if "lines0" in pred:
                 lines0 = pred["lines0"].cpu()
                 lines1 = pred["lines1"].cpu()
@@ -216,41 +220,32 @@ class HPatchesPipeline(EvalPipeline):
                 )
                 results_i["num_lines"] = (lines0.shape[0] + lines1.shape[0]) / 2
 
-            return results_i
+            for k, v in results_i.items():
+                results[k].append(v)
 
-        # Run in parallel with a progress bar
-        with ThreadPoolExecutor() as executor:
-            futures = {
-                executor.submit(evaluate_sample, i, data): i
-                for i, data in enumerate(loader)
-            }
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Evaluating"):
-                results_i = future.result()
-                for k, v in results_i.items():
-                    results[k].append(v)
-
-        # Summarize results
+        # summarize results as a dict[str, float]
+        # you can also add your custom evaluations here
         summaries = {}
         for k, v in results.items():
             arr = np.array(v)
-            if not np.issubdtype(arr.dtype, np.number):
+            if not np.issubdtype(np.array(v).dtype, np.number):
                 continue
             if k.startswith("H_err"):
                 summaries[f"m{k}"] = round(np.mean(arr), 3)
             else:
                 summaries[f"m{k}"] = round(np.median(arr), 3)
 
-        if "repeatability" in results:
+        if "repeatability" in results.keys():
             for i, th in enumerate(self.conf.repeatability_th):
-                values = [x[i] for x in results["repeatability"]]
-                summaries[f"repeatability@{th}px"] = round(np.median(values), 3)
-
-        if "loc_error" in results:
+                cur_nums = list(map(lambda x: x[i], results["repeatability"]))
+                summaries[f"repeatability@{th}px"] = round(np.median(cur_nums), 3)
+        if "loc_error" in results.keys():
             for i, th in enumerate(self.conf.num_lines_th):
-                values = [x[i] for x in results["loc_error"]]
-                summaries[f"loc_error@{th}lines"] = round(np.median(values), 3)
+                cur_nums = list(map(lambda x: x[i], results["loc_error"]))
+                summaries[f"loc_error@{th}lines"] = round(np.median(cur_nums), 3)
 
         figures = {}
+
         return summaries, figures, results
 
 
@@ -295,14 +290,14 @@ if __name__ == "__main__":
 
     with_gaussian_params = [True, False]
     scale_params = [1.0, 0.95, 0.9, 0.85, 0.8]
-    sigma_scale_params = [0.7, 0.6, 0.5]
+    sigma_scale_params = [0.8, 0.7, 0.6, 0.5, 0.4]
     quant_params = [1.5, 2.0, 2.5]
     angle_th_params = [20,22.5,25]
 
     test = False
     if test:
-        with_gaussian_params = [True]
-        scale_params = [0.8]
+        with_gaussian_params = [True, False]
+        scale_params = [1.0, 0.8]
         sigma_scale_params = [0.6]
         quant_params = [2.0]
         angle_th_params = [22.5]
@@ -323,7 +318,8 @@ if __name__ == "__main__":
         loc_error = s['loc_error@10lines'] + s['loc_error@50lines'] + s['loc_error@300lines']
         hM_error = s['mH_err@1'] + s['mH_err@3'] + s['mH_err@5']
         repeatability = s['repeatability@1px'] + s['repeatability@3px'] + s['repeatability@5px']
-        return loc_error + hM_error + repeatability
+        # - ==> the higher the better
+        return loc_error - hM_error - repeatability
 
 
     best = 100000
@@ -332,7 +328,7 @@ if __name__ == "__main__":
 
     pipeline.conf.model.extractor.search = True
     for counter, combo in enumerate(all_combinations):
-        print(f"=== [{counter}/{total_combinaisons}] ===")
+
 
         pipeline.conf.model.extractor.with_gaussian = combo[0]
         pipeline.conf.model.extractor.scale = combo[1]
@@ -348,12 +344,24 @@ if __name__ == "__main__":
             overwrite=args.overwrite,
             overwrite_eval=args.overwrite_eval,
             plot=args.plot,
-        )
+        )   
 
         if get_final_score(s) < best:
             best_type = copy.copy(pipeline.conf)
             best_s = copy.deepcopy(s)
             best = get_final_score(s)
+
+
+        print(f"=== [{counter}/{total_combinaisons}] ===")
+        print("=== Current configuration and score === ")
+        pprint(combo)
+        pprint(s)
+        print("=== Best configuration===")
+        pprint(best_type)
+        pprint(best_s)
+
+        print(f"Scores: [CURRENT] {get_final_score(s)} [BEST] {get_final_score(best_s)}")
+
 
     print("Running base configuration")
     pipeline.conf.model.extractor.search = False
