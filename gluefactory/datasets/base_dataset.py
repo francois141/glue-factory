@@ -138,7 +138,7 @@ class BaseDataset(metaclass=ABCMeta):
         if isinstance(conf, dict):
             conf = OmegaConf.create(conf)
         self.conf = OmegaConf.merge(default_conf, conf)
-        OmegaConf.set_readonly(self.conf, True)
+        OmegaConf.set_readonly(self.conf, False)
         logger.info(f"Creating dataset {self.__class__.__name__}")
         self._init(self.conf)
 
