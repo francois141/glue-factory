@@ -92,35 +92,37 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
             assert False, "We should not arrive here"
             self.download_oxford_paris_mini_100k()
 
-        # Recursively list all files containing 'base_image' in their path
-        matching_files = []
-
-        for img_file in data_directory.rglob("*base_image.jpg"):
-            stem = img_file.stem.replace("base_image", "")  # get the base prefix
-            base_dir = img_file.parent
-
-            # Build expected paths
-            df_file = base_dir / f"{stem}df.npy"
-            af_file = base_dir / f"{stem}af.npy"
-            heatmap_file = base_dir / f"{stem}heatmap.npy"
-
-            # Check all 4 files exist and are non-empty
-            files = [img_file, df_file, af_file, heatmap_file]
-            if all(p.exists() and p.stat().st_size > 0 for p in files):
-                matching_files.append(img_file)
-            else:
-                print(f"Skipping {img_file} — one or more files missing or empty.")
-                
         # Build the output path
         output_path = root / self.conf.img_list
 
-        # Ensure the parent directory exists
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if not output_path.exists():
+            # Recursively list all files containing 'base_image' in their path
+            matching_files = []
 
-        # Write each path to a new line in the output file
-        with open(output_path, "w") as f:
-            for file_path in matching_files:
-                f.write(str(file_path) + "\n")
+            for img_file in data_directory.rglob("*base_image.jpg"):
+                stem = img_file.stem.replace("base_image", "")  # get the base prefix
+                base_dir = img_file.parent
+
+                # Build expected paths
+                df_file = base_dir / f"{stem}df.npy"
+                af_file = base_dir / f"{stem}af.npy"
+                heatmap_file = base_dir / f"{stem}heatmap.npy"
+
+                # Check all 4 files exist and are non-empty
+                files = [img_file, df_file, af_file, heatmap_file]
+                if all(p.exists() and p.stat().st_size > 0 for p in files):
+                    matching_files.append(img_file)
+                else:
+                    print(f"Skipping {img_file} — one or more files missing or empty.")
+
+
+            # Ensure the parent directory exists
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write each path to a new line in the output file
+            with open(output_path, "w") as f:
+                for file_path in matching_files:
+                    f.write(str(file_path) + "\n")
                 
         # Log how many images we have
         print(f"Dataset contains {len(matching_files)} images")
