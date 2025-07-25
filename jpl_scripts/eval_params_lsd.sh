@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=6000
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+DIR=$SLURM_SUBMIT_DIR/jpl_scripts
 source $DIR/common.sh
 
 SetupStack
