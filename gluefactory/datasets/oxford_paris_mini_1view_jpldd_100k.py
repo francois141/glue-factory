@@ -288,7 +288,6 @@ class _Dataset(torch.utils.data.Dataset):
         img_path = str(img_folder_path) + "_df.npy"
         img = np.load(img_path)
 
-        img = img[None]
         img = torch.tensor(img)
 
         if self.conf.device is not None:
@@ -302,12 +301,11 @@ class _Dataset(torch.utils.data.Dataset):
         img_path = str(img_folder_path) + "_af.npy"
         img = np.load(img_path)
 
-        img = img[None]
         img = torch.tensor(img)
 
         if self.conf.device is not None:
             img = img.to(self.conf.device)
-        return img * 255
+        return img
 
     def _read_keypoint_mask(self, img_folder_path, enforce_batch_dim=False):
         """
@@ -316,7 +314,6 @@ class _Dataset(torch.utils.data.Dataset):
         img_path = str(img_folder_path) + "_heatmap.npy"
         img = np.load(img_path)
 
-        img = img[None]
         img = torch.tensor(img)
 
         if self.conf.device is not None:
@@ -367,16 +364,16 @@ class _Dataset(torch.utils.data.Dataset):
         )
 
         # Load distance field
-        distance_field = self._read_df(image_folder_path)[0]
+        distance_field = self._read_df(image_folder_path)
         thres = self.conf.load_features.line_gt.enforce_threshold
         if thres is not None:
             distance_field = torch.where(distance_field > thres, thres, distance_field)
 
         # Load angle field
-        angle_field = self._read_af(image_folder_path)[0]
+        angle_field = self._read_af(image_folder_path)
 
         # Load keypoint heatmap
-        keypoint_scores = self._read_keypoint_mask(image_folder_path)[0]
+        keypoint_scores = self._read_keypoint_mask(image_folder_path)
 
         # Reshape maps if needed
         if shape is not None:
