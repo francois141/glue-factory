@@ -21,4 +21,5 @@ OUTPUT_DIR=$DIR/eval/jpl_benchmark
 
 echo "Running JPL benchmark"
 
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/COMMON_BENCHMARK_CONF.yaml --overwrite > "${OUTPUT_DIR}/jpl_benchmark.txt"
+python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/benchmark_jpl_lsd.yaml --overwrite > "${OUTPUT_DIR}/jpl_lsd_benchmark.txt"
+python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/benchmark_jpl_fastlsd.yaml --overwrite > "${OUTPUT_DIR}/jpl_fast_benchmark.txt"
