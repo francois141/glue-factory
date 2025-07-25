@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cmd params 'run_training_euler.sh [exp_name] [path to conf]'
  
-#SBATCH --time=1-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --gpus=4
@@ -22,4 +22,4 @@ module load gflags/2.2.2-gpd4lxs
 source /cluster/home/fcosta/myenv/bin/activate
 
 echo "Starting training"
-python -m gluefactory.train TEST_TRAIN --conf=gluefactory/configs/train_jpl_oxparis_base.yaml
+python -m gluefactory.train TRAIN_100k --conf=gluefactory/configs/train_jpl_oxparis_100k.yaml

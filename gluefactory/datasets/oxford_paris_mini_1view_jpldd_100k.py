@@ -79,8 +79,8 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
         "img_list": "gluefactory/datasets/oxford_paris_images_100k.txt",
         # img list path from repo root -> use checked in file list, it is similar to pold2 file
         "rand_shuffle_seed": None,  # seed to randomly shuffle before split in train and val
-        "val_size": 500,  # size of validation set given
-        "train_size": 11500,
+        "val_size": 2000,  # size of validation set given
+        "train_size": 100000,
     }
 
     def _init(self, conf):
@@ -93,8 +93,24 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
             self.download_oxford_paris_mini_100k()
 
         # Recursively list all files containing 'base_image' in their path
-        matching_files = [f for f in data_directory.rglob("*base_image.jpg")]
+        matching_files = []
 
+        for img_file in data_directory.rglob("*base_image.jpg"):
+            stem = img_file.stem.replace("base_image", "")  # get the base prefix
+            base_dir = img_file.parent
+
+            # Build expected paths
+            df_file = base_dir / f"{stem}df.npy"
+            af_file = base_dir / f"{stem}af.npy"
+            heatmap_file = base_dir / f"{stem}heatmap.npy"
+
+            # Check all 4 files exist and are non-empty
+            files = [img_file, df_file, af_file, heatmap_file]
+            if all(p.exists() and p.stat().st_size > 0 for p in files):
+                matching_files.append(img_file)
+            else:
+                print(f"Skipping {img_file} — one or more files missing or empty.")
+                
         # Build the output path
         output_path = root / self.conf.img_list
 
@@ -107,7 +123,7 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
                 f.write(str(file_path) + "\n")
                 
         # Log how many images we have
-        print(f"Dataset containts {len(matching_files)} images")
+        print(f"Dataset contains {len(matching_files)} images")
 
         with open(root / self.conf.img_list, "r") as f:
             self.img_list = [file_name.strip("\n") for file_name in f.readlines()]
@@ -268,7 +284,11 @@ class _Dataset(torch.utils.data.Dataset):
         Read distance field as tensor and puts it on device
         """
         img_path = str(img_folder_path) + "_df.npy"
-        img = numpy_image_to_torch(np.load(img_path))
+        img = np.load(img_path)
+
+        img = img[None]
+        img = torch.tensor(img)
+
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img
@@ -278,7 +298,11 @@ class _Dataset(torch.utils.data.Dataset):
         Read distance field as tensor and puts it on device
         """
         img_path = str(img_folder_path) + "_af.npy"
-        img = numpy_image_to_torch(np.load(img_path))
+        img = np.load(img_path)
+
+        img = img[None]
+        img = torch.tensor(img)
+
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img * 255
@@ -288,7 +312,11 @@ class _Dataset(torch.utils.data.Dataset):
         Read distance field as tensor and puts it on device
         """
         img_path = str(img_folder_path) + "_heatmap.npy"
-        img = numpy_image_to_torch(np.load(img_path))
+        img = np.load(img_path)
+
+        img = img[None]
+        img = torch.tensor(img)
+
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img
@@ -337,16 +365,16 @@ class _Dataset(torch.utils.data.Dataset):
         )
 
         # Load distance field
-        distance_field = self._read_df(image_folder_path)
+        distance_field = self._read_df(image_folder_path)[0]
         thres = self.conf.load_features.line_gt.enforce_threshold
         if thres is not None:
             distance_field = torch.where(distance_field > thres, thres, distance_field)
 
         # Load angle field
-        angle_field = self._read_af(image_folder_path)
+        angle_field = self._read_af(image_folder_path)[0]
 
         # Load keypoint heatmap
-        keypoint_scores = self._read_keypoint_mask(image_folder_path)
+        keypoint_scores = self._read_keypoint_mask(image_folder_path)[0]
 
         # Reshape maps if needed
         if shape is not None:

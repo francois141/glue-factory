@@ -3,7 +3,7 @@ import torch
 from kornia.geometry.transform import warp_perspective
 from kornia.morphology import erosion
 
-from ..datasets.utils import sample_homography
+from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 
 default_H_params = {
     "translation": True,
@@ -49,7 +49,7 @@ def torch_homography_adaptation(
         else:
             Hs.append(
                 torch.tensor(
-                    sample_homography((h, w), **default_H_params),
+                    sample_homography_deeplsd((h, w), **default_H_params),
                     dtype=torch.float,
                     device=device,
                 )

@@ -288,11 +288,14 @@ if __name__ == "__main__":
     # py::arg("gradangle") = py::array(),
     # py::arg("grad_nfa") = false);
 
-    with_gaussian_params = [True, False]
-    scale_params = [1.0, 0.95, 0.9, 0.85, 0.8]
-    sigma_scale_params = [0.8, 0.7, 0.6, 0.5, 0.4]
-    quant_params = [1.5, 2.0, 2.5]
-    angle_th_params = [20,22.5,25]
+    with_gaussian_params = [True]
+    scale_params = [1.0]
+    sigma_scale_params = [ 0.6, 0.575, 0.55]
+    quant_params = [1.00, 1.10, 1.25, 1.5, 1,75]
+    angle_th_params = [25.5, 26, 26.5]
+
+    # Best configuration
+    # {'name': 'lines.lsd', 'faster_lsd': True, 'search': True, 'with_gaussian': True, 'scale': 1.0, 'sigma_scale': 0.575, 'quant': 1.0, 'angle_th': 25.5}
 
     test = False
     if test:

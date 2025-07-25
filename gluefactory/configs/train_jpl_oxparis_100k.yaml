@@ -27,8 +27,8 @@ data:
         augment:  # activate or deactivate data augmentation
             do: False
             type: "dark" # choose identity, dark or lg
-    val_size: 500
-    train_size: 11500
+    val_size: 2000
+    train_size: 100000
     
 model:
     name: joint_point_line_extractor

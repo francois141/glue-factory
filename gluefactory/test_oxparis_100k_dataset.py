@@ -86,7 +86,8 @@ def visualize_img_with_gt(name, dset, num=5, offset=0, lim_kpoints=-1):
     plt.close()
 
 # Command to launch it
-# python -m gluefactory.test_dataset --conf gluefactory/configs/train_jpl_oxparis_100k.yaml 
+# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_100k.yaml 
+# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_base.yaml 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf", type=str, default=None)
@@ -104,6 +105,13 @@ if __name__ == "__main__":
 
     for it, data in enumerate(train_loader):
         dataset = {}
+
+        print(data.keys())
+        
+        print(data['deeplsd_distance_field'].shape)
+        print(data['deeplsd_angle_field'].shape)
+        print(data['superpoint_heatmap'].shape)
+        continue
 
         # Load image
         dataset["image"] = data["image"]
