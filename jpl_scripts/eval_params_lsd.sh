@@ -1,6 +1,6 @@
 #!/bin/bash
 # Cmd params 'run_training_euler.sh [exp_name] [path to conf]'
- 
+
 #SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
@@ -14,5 +14,11 @@ source $DIR/common.sh
 
 SetupStack
 
-echo "Starting training"
-python -m gluefactory.train TRAIN_100k --conf=gluefactory/configs/train_jpl_oxparis_100k.yaml
+mkdir $DIR/eval/
+mkdir $DIR/eval/params_lsd
+
+OUTPUT_FILE=$DIR/eval/params_lsd/output.txt
+
+echo "Running search space on faster_lsd"
+
+python -m gluefactory.eval.hpatches_lines_grid_search --conf gluefactory/configs/eval/fastlsd+LM.yaml --overwrite > $OUTPUT_FILE
