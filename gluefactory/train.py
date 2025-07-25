@@ -82,7 +82,7 @@ def do_evaluation(model, loader, device, loss_fn, conf, rank, pbar=True):
     results = {}
     pr_metrics = defaultdict(PRMetric)
     figures = []
-    if conf.plot is not None and rank == 0:
+    if conf.plot is not None:
         n, plot_fn = conf.plot
         plot_ids = np.random.choice(len(loader), min(len(loader), n), replace=False)
     for i, data in enumerate(
@@ -664,6 +664,7 @@ def training(rank, conf, output_dir, args):
                 distributed=args.distributed,
             )
 
+        results = None  # free memory
         epoch += 1
 
     logger.info(f"Finished training on process {rank}.")
