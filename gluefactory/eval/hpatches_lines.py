@@ -264,10 +264,18 @@ if __name__ == "__main__":
         default_conf,
     )
 
+    pipeline = HPatchesPipeline(conf)
+
+    if args.checkpoint is not None:
+        pipeline.conf.model.checkpoint = args.checkpoint
+        pipeline.conf.model.extractor.checkpoint = args.checkpoint
+        name += "_"
+        name += args.checkpoint.split("/")[-2]
+
     experiment_dir = output_dir / name
     experiment_dir.mkdir(exist_ok=True)
 
-    pipeline = HPatchesPipeline(conf)
+
     s, f, r = pipeline.run(
         experiment_dir,
         overwrite=args.overwrite,
