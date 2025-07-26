@@ -14,8 +14,7 @@ source $DIR/common.sh
 
 SetupStack
 
-mkdir $DIR/eval/
-mkdir $DIR/eval/af_evaluation
+mkdir -p $DIR/eval/af_evaluation
 
 OUTPUT_DIR=$DIR/eval/af_evaluation
 

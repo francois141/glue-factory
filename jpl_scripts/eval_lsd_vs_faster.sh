@@ -14,8 +14,7 @@ source $DIR/common.sh
 
 SetupStack
 
-mkdir $DIR/eval/
-mkdir $DIR/eval/fast_lsd_eval
+mkdir -p $DIR/eval/fast_lsd_eval
 
 OUTPUT_DIR=$DIR/eval/fast_lsd_eval
 

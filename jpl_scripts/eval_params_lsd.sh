@@ -14,8 +14,7 @@ source $DIR/common.sh
 
 SetupStack
 
-mkdir $DIR/eval/
-mkdir $DIR/eval/params_lsd
+mkdir -p $DIR/eval/params_lsd
 
 OUTPUT_FILE=$DIR/eval/params_lsd/output.txt
 

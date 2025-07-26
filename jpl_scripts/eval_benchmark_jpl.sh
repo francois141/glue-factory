@@ -14,12 +14,21 @@ source $DIR/common.sh
 
 SetupStack
 
-mkdir $DIR/eval/
-mkdir $DIR/eval/jpl_benchmark
+mkdir -p $DIR/eval/jpl_benchmark
 
 OUTPUT_DIR=$DIR/eval/jpl_benchmark
 
-echo "Running JPL benchmark"
+echo "Running JPL benchmark: $1"
 
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/benchmark_jpl_lsd.yaml --overwrite > "${OUTPUT_DIR}/jpl_lsd_benchmark.txt"
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/benchmark_jpl_fastlsd.yaml --overwrite > "${OUTPUT_DIR}/jpl_fast_benchmark.txt"
+ENTRY=$1
+CHECKPOINT_PATH="/cluster/scratch/fcosta/outputs/training/$ENTRY/checkpoint_best.tar"
+
+python -m gluefactory.eval.hpatches_lines \
+  --conf gluefactory/configs/benchmark_jpl_lsd.yaml \
+  --checkpoint $CHECKPOINT_PATH \
+  --overwrite > "${OUTPUT_DIR}/${ENTRY}_jpl_lsd_benchmark.txt"
+
+python -m gluefactory.eval.hpatches_lines \
+  --conf gluefactory/configs/benchmark_jpl_fastlsd.yaml \
+  --checkpoint $CHECKPOINT_PATH \
+  --overwrite > "${OUTPUT_DIR}/${ENTRY}_jpl_fast_benchmark.txt"
