@@ -15,3 +15,6 @@ image_list100.txt
 /myenv/
 
 checkpoints
+slurm*
+/jpl_scripts/eval/
+eval/
