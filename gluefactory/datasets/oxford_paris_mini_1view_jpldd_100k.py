@@ -124,8 +124,8 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
                 for file_path in matching_files:
                     f.write(str(file_path) + "\n")
                 
-        # Log how many images we have
-        print(f"Dataset contains {len(matching_files)} images")
+            # Log how many images we have
+            print(f"Dataset contains {len(matching_files)} images")
 
         with open(root / self.conf.img_list, "r") as f:
             self.img_list = [file_name.strip("\n") for file_name in f.readlines()]
