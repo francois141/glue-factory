@@ -192,22 +192,6 @@ class HPatchesPipeline(EvalPipeline):
                 lines0 = pred["lines0"].cpu()
                 lines1 = pred["lines1"].cpu()
 
-                if plot:
-                    plot_images(
-                        [
-                            data["view0"]["image"].permute(1, 2, 0),
-                            data["view1"]["image"].permute(1, 2, 0),
-                        ],
-                        ["H0", "H1"],
-                    )
-
-                    lines_images_0 = pred["lines0"].flip(-1)
-                    lines_images_1 = pred["lines1"].flip(-1)
-
-                    plot_lines(lines=[lines_images_0, lines_images_1])
-                    save_plot(os.path.join(f"./match_score/{pipeline.conf.model.checkpoint.split("/")[-2]}/", f"{i}.jpg"))
-                    plt.close()
-
                 results_i["repeatability"] = compute_repeatability(
                     lines0,
                     lines1,
@@ -221,6 +205,22 @@ class HPatchesPipeline(EvalPipeline):
                     pred["line_matching_scores0"].cpu(), self.conf.num_lines_th
                 )
                 results_i["num_lines"] = (lines0.shape[0] + lines1.shape[0]) / 2
+
+                if plot:
+                    plot_images(
+                        [
+                            data["view0"]["image"].permute(1, 2, 0),
+                            data["view1"]["image"].permute(1, 2, 0),
+                        ],
+                        ["Loc error: " + str(results_i["loc_error"]),"Repeatability: " + str(results_i["repeatability"])],
+                    )
+
+                    lines_images_0 = pred["lines0"].flip(-1)
+                    lines_images_1 = pred["lines1"].flip(-1)
+
+                    plot_lines(lines=[lines_images_0, lines_images_1])
+                    save_plot(os.path.join(f"./match_score/{pipeline.conf.model.checkpoint.split("/")[-2]}/", f"{i}.jpg"))
+                    plt.close()
 
             for k, v in results_i.items():
                 results[k].append(v)
@@ -249,7 +249,7 @@ class HPatchesPipeline(EvalPipeline):
         figures = {}
         return summaries, figures, results
 
-
+# Command to run: python -m gluefactory.eval.hpatches_lines   --conf gluefactory/configs/benchmark_jpl_lsd.yaml 
 if __name__ == "__main__":
     dataset_name = Path(__file__).stem
     parser = get_eval_parser()
