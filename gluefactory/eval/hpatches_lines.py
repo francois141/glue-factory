@@ -200,8 +200,12 @@ class HPatchesPipeline(EvalPipeline):
                         ],
                         ["H0", "H1"],
                     )
-                    plot_lines(lines=[pred["orig_lines0"], pred["orig_lines1"]])
-                    save_plot(os.path.join("./match_score/", f"{i}.jpg"))
+
+                    lines_images_0 = pred["lines0"].flip(-1)
+                    lines_images_1 = pred["lines1"].flip(-1)
+
+                    plot_lines(lines=[lines_images_0, lines_images_1])
+                    save_plot(os.path.join(f"./match_score/{pipeline.conf.model.checkpoint.split("/")[-2]}/", f"{i}.jpg"))
                     plt.close()
 
                 results_i["repeatability"] = compute_repeatability(
@@ -266,6 +270,7 @@ if __name__ == "__main__":
 
     pipeline = HPatchesPipeline(conf)
 
+    pipeline.conf.model.checkpoint = conf.model.extractor.checkpoint
     if args.checkpoint is not None:
         pipeline.conf.model.checkpoint = args.checkpoint
         pipeline.conf.model.extractor.checkpoint = args.checkpoint
