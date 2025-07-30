@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import torch
+import os
 
 
 def cm_ranking(sc, ths=[512, 1024, 2048, 4096]):
@@ -460,6 +461,7 @@ def plot_color_line_matches(lines, correct_matches=None, lw=2, indices=(0, 1)):
 
 def save_plot(path, **kw):
     """Save the current figure without any white margin."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     plt.savefig(path, bbox_inches="tight", pad_inches=0, **kw)
 
 
