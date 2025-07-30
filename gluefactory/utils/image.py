@@ -128,7 +128,7 @@ def numpy_image_to_torch(image: np.ndarray) -> torch.Tensor:
     return torch.tensor(image / 255.0, dtype=torch.float)
 
 
-def load_image(path: Path, grayscale=False) -> torch.Tensor:
+def load_image(path: Path, grayscale) -> torch.Tensor:
     image = read_image(path, grayscale=grayscale)
     return numpy_image_to_torch(image)
 

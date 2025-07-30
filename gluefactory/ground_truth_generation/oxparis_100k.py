@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 import matplotlib.pyplot as plt
 from faster_pytlsd import lsd as fast_lsd
+from gluefactory.ground_truth_generation.generate_gt_deeplsd import generate_ground_truth_with_homography_adaptation
 
 import random
 import cv2
@@ -28,8 +29,10 @@ from gluefactory.datasets import get_dataset
 from gluefactory.geometry.homography import sample_homography_corners
 from gluefactory.models.extractors.superpoint import top_k_keypoints
 from gluefactory.models.extractors.superpoint_open import SuperPoint
+from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
-from gluefactory.settings import EVAL_PATH
+from gluefactory.settings import EVAL_PATH, DATA_PATH
+from gluefactory.models.lines.deeplsd import DeepLSD
 
 class KPExtractor:
     def __init__(self, config):
@@ -161,6 +164,10 @@ conf = {
     "min_convexity": 0.05,
 }
 
+dad_conf = {
+    "max_num_keypoints": 1024,
+}
+
 sp_conf = {
     "max_num_keypoints": None,
     "nms_radius": 4,
@@ -202,7 +209,7 @@ homography_params = {
 
 def warp_points(points: torch.Tensor, H) -> torch.Tensor:
     """Warp 2D points by a homography H using PyTorch tensors."""
-    H = torch.tensor(H).to("cuda")
+    H = torch.tensor(H).to(device)
     n_points = points.shape[0]
 
     # Swap x and y (axis 1 becomes axis 0)
@@ -227,7 +234,26 @@ def warp_lines(lines, H):
     """ Warp lines of the shape [N, 2, 2] by an homography H. """
     return warp_points(lines.reshape(-1, 2), H).reshape(-1, 2, 2)
 
-def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
+
+# Deep LSD Config
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+conf = {
+    'detect_lines': False,  # Whether to detect lines or only DF/AF
+    'line_detection_params': {
+        'merge': False,  # Whether to merge close-by lines
+        'filtering': True,
+        # Whether to filter out lines based on the DF/AF. Use 'strict' to get an even stricter filtering
+        'grad_thresh': 3,
+        'grad_nfa': True,
+        # If True, use the image gradient and the NFA score of LSD to further threshold lines. We recommand using it for easy images, but to turn it off for challenging images (e.g. night, foggy, blurry images)
+    }
+}
+
+# Load the model
+deeplsd_network = DeepLSD(conf)
+deeplsd_network = deeplsd_network.to(device).eval()
+
+def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5):
     """ Perform homography adaptation to regress line distance function maps.
     Args:
         img: a grayscale np image.
@@ -244,10 +270,17 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
     angles = []
     counts = []
 
+    # We currently set to a single homography only
+    num = 1
+
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (border_margin * 2, border_margin * 2))
 
+    deeplsd_generation = True
+    if deeplsd_generation:
+        df, angle = generate_ground_truth_with_homography_adaptation(torch.tensor(img).to(device).unsqueeze(0), deeplsd_network)
+        return df.cpu().numpy(), angle.cpu().numpy()
+
     with torch.no_grad():
-        device="cuda"
         pix_loc = torch.tensor(np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing='ij'),
                         axis=-1)).to(device)
 
@@ -287,51 +320,24 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
 
             offset = offset[0].permute(1, 2, 0)[:, :, [1, 0]]
 
+            df = torch.norm(offset, dim=-1)
+            angle = torch.remainder(torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi)
+
             # Compute the valid pixels
             count = cv2.warpPerspective(np.ones_like(img), H_inv, size,
                                     flags=cv2.INTER_NEAREST)
             count = cv2.erode(count, kernel)
             counts.append(count)
 
-            df = torch.norm(offset, dim=-1)
             df_maps.append(df)
-
-            angle = torch.remainder(torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi)
             angles.append(angle)
 
             raster_lines += (df < 1).cpu().numpy().astype(np.uint8) * count
 
-            if is_analysis:
-                new_value = torch.median(torch.stack(df_maps), dim=0).values.cpu().numpy() - previuos
-                if previous_value != None:
-                    diff = np.abs(previous_value - new_value)
-                    analysis_values_mean.append(float(np.mean(diff)))
-                    analysis_values_max.append(float(np.max(diff)))
-                previous_value = torch.median(torch.stack(df_maps), dim=0).values.cpu().numpy()
-
-        if is_analysis:
-            # Plot maximum difference
-            plt.figure()
-            x = np.linspace(0, num-1, num-1)
-            plt.plot(x, analysis_values_max, label='max diff prev and current df')
-            plt.xlabel('Number iterations')
-            plt.ylabel('Diff')
-            plt.grid(True)
-            plt.legend()
-            plt.savefig(f"test_max_{random.randint(1, 10000)}.jpg")
-            # Plot mean difference
-            plt.figure()
-            plt.plot(x, analysis_values_mean, label='mean diff prev and current df')
-            plt.xlabel('Number iterations')
-            plt.ylabel('Diff')
-            plt.grid(True)
-            plt.legend()
-            plt.savefig(f"test_mean_{random.randint(1, 10000)}.jpg")
-
         # Compute the median of all DF maps, with counts as weights
         df_maps = torch.stack(df_maps)
         angles = torch.stack(angles)
-        counts = torch.tensor(np.stack(counts)).to("cuda")
+        counts = torch.tensor(np.stack(counts)).to(device)
 
         # Median of the DF
         df_maps[counts == 0] = torch.nan
@@ -389,10 +395,20 @@ def ha_forward_points(img, is_analysis, num=100):
     """
     h, w = img.shape[:2]
 
+    num = 1
+
+    img = np.transpose(img, (2, 0, 1))
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = SuperPoint(sp_conf).to(device)
-    model.eval().to(device)
+    use_dad = True
+
+    if use_dad:
+        model = DadDetector(sp_conf).to(device)
+        model.eval().to(device)
+    else:
+        model = SuperPoint(sp_conf).to(device)
+        model.eval().to(device)
 
     Hs = []
     for i in range(num):
@@ -428,7 +444,7 @@ def ha_forward_points(img, is_analysis, num=100):
     erosion_kernel = erosion_kernel.to(device)
 
     sp_image_tensor = (
-        torch.tensor(img, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+        torch.tensor(img, dtype=torch.float32, device=device).unsqueeze(0)
     )
     n_mini_batch = int(np.ceil(num / bs))
     scores = torch.empty((B, 0, h, w), dtype=torch.float, device=device)
@@ -485,23 +501,6 @@ def ha_forward_points(img, is_analysis, num=100):
 
             scoremap = score.squeeze(0)
 
-            if is_analysis:
-                if previous_value != None:
-                    delta_diff = torch.max(torch.abs(scoremap - previous_value)).cpu().numpy()
-                    delta_max_diff.append(delta_diff)
-                previous_value = scoremap
-
-    if is_analysis:
-        # Plot maximum difference
-        plt.figure()
-        x = np.linspace(0, num-1, num-1)
-        plt.plot(x, delta_max_diff, label='max diff prev and current point scoremap')
-        plt.xlabel('Number iterations')
-        plt.ylabel('Diff')
-        plt.grid(True)
-        plt.legend()
-        plt.savefig(f"test_point_max_{random.randint(1, 10000)}.jpg")
-
     return scoremap
 
 def check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8):
@@ -531,7 +530,7 @@ def process_points(img_data, num_H, output_folder_path, is_analysis):
     image_numpy = np.transpose(img_data["image"].numpy()[0], (1, 2, 0))  # H x W x C
 
     # Then add image if it doesn't exist
-    image_u8 = (image_numpy[:, :, 0] * 255).astype(np.uint8)
+    image_u8 = (image_numpy * 255).astype(np.uint8)
     check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8)
 
     # Then generate the dataset with homography adapataion
@@ -554,20 +553,17 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     image_numpy = np.transpose(img_data["image"].numpy()[0], (1, 2, 0))  # H x W x C
 
     # Then add image if it doesn't exist
-    image_u8 = (image_numpy[:, :, 0] * 255).astype(np.uint8)
+    image_u8 = (image_numpy * 255).astype(np.uint8)
     check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8)
 
     # Run homography adaptation
-    df, af, background_mask = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
+    df, af = ha_df_deeplsd(img_data["name"], image_numpy,is_analysis, num=num_H)
 
     # Save the distance field
     np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy", df)
 
     # Save the angle field
     np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.npy", af)
-
-    # Save the backround mask
-    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_bgmask.npy", background_mask)
 
 def process_both(img_data, num_H, output_folder_path, is_analysis):
     """
@@ -580,17 +576,17 @@ def export_ha(
     data_loader, output_folder_path, num_H: int, n_jobs: int, type:str
 ):
     if type == 'points':
-        Parallel(n_jobs=n_jobs, backend="multiprocessing")(
+        Parallel(n_jobs=n_jobs, backend="loky")(
             delayed(process_points)(img_data, num_H, output_folder_path, args.analysis)
             for img_data in tqdm(data_loader, total=len(data_loader))
         )
     elif type == 'lines':
-        Parallel(n_jobs=n_jobs, backend="multiprocessing")(
+        Parallel(n_jobs=n_jobs, backend="loky")(
             delayed(process_distance_field)(img_data, num_H, output_folder_path, args.analysis)
             for img_data in tqdm(data_loader, total=len(data_loader))
         )
     elif type == 'both':
-        Parallel(n_jobs=n_jobs, backend="multiprocessing")(
+        Parallel(n_jobs=n_jobs, backend="loky")(
             delayed(process_both)(img_data, num_H, output_folder_path, args.analysis)
             for img_data in tqdm(data_loader, total=len(data_loader))
         )

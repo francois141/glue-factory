@@ -128,7 +128,6 @@ class _Dataset(torch.utils.data.Dataset):
     def __init__(self, conf, image_paths: list[str], split):
         self.split = split
         self.conf = conf
-        self.grayscale = bool(conf.grayscale)
         # self.conf is set in superclass
         # set img preprocessor
         self.preprocessor = ImagePreprocessor(conf.preprocessing)
@@ -178,7 +177,7 @@ class _Dataset(torch.utils.data.Dataset):
         """
         Read image as tensor and puts it on device
         """
-        img = load_image(path, grayscale=self.grayscale)
+        img = load_image(path, grayscale=False)
         if enforce_batch_dim:
             if img.ndim < 4:
                 img = img.unsqueeze(0)
@@ -186,7 +185,7 @@ class _Dataset(torch.utils.data.Dataset):
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img
-
+    
     def _read_groundtruth(self, image_path, enforce_batch_dim=True):
         """
         Reads groundtruth for points and lines from respective h5files.
