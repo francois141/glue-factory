@@ -70,6 +70,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
+            "df_only": False, # train only distance field
             "aliked_pretrained": True,  # use pretrained ALIKED weights in backbone encoder
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
@@ -633,6 +634,31 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if self.conf.training.two_view
             else None
         )
+        
+        # Distance field loss. Depends on the pipeline (two-view or one-view)
+        # use normalized versions for loss
+        if self.conf.training.loss.use_one_view_df_loss:
+            line_df_loss = F.l1_loss(
+                self.normalize_df(prediction_dict["line_distancefield"])
+                * df_gt_mask_view0
+                * padding_mask_view0,
+                self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
+                * df_gt_mask_view0
+                * padding_mask_view0,
+                # only supervise in line neighborhood
+                reduction="none",
+            ).mean(dim=(1, 2))
+            losses["one_view_line_df"] = line_df_loss
+            losses["total"] += (
+                self.conf.training.loss.loss_weights.one_view_line_df_weight
+                * line_df_loss
+            )
+
+            if self.conf.training.df_only:
+                # add metrics if in validation mode
+                if not self.training:
+                    metrics = self.metrics(pred, data)
+                return losses, metrics
 
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
@@ -732,25 +758,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             losses["total"] += (
                 self.conf.training.loss.loss_weights.one_view_line_af_weight
                 * line_af_loss
-            )
-
-        # Distance field loss. Depends on the pipeline (two-view or one-view)
-        # use normalized versions for loss
-        if self.conf.training.loss.use_one_view_df_loss:
-            line_df_loss = F.l1_loss(
-                self.normalize_df(prediction_dict["line_distancefield"])
-                * df_gt_mask_view0
-                * padding_mask_view0,
-                self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
-                * df_gt_mask_view0
-                * padding_mask_view0,
-                # only supervise in line neighborhood
-                reduction="none",
-            ).mean(dim=(1, 2))
-            losses["one_view_line_df"] = line_df_loss
-            losses["total"] += (
-                self.conf.training.loss.loss_weights.one_view_line_df_weight
-                * line_df_loss
             )
 
         # Two view df consistency loss
