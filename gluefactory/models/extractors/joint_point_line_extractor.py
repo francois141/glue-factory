@@ -583,13 +583,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     reduction="none",
                 ).mean(dim=(1, 2))
             else:
-                losses["one_view_line_df"] = F.l1_loss(
+                losses["one_view_line_df"] = F.mse_loss(
                     line_df, deeplsd_line_df, reduction="none"
                 ).mean(dim=(1, 2))
 
             losses["total"] += (
                 self.conf.training.loss.loss_weights.one_view_line_df_weight
-                * line_df_loss
+                * losses["one_view_line_df"]
             )
 
             if self.conf.training.df_only:

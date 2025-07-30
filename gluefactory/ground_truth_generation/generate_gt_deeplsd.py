@@ -3,7 +3,7 @@ import torch
 from kornia.geometry.transform import warp_perspective
 from kornia.morphology import erosion
 
-from gluefactory.datasets.homographies_deeplsd import sample_homography
+from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.models.lines.deeplsd import DeepLSD
 
 default_H_params = {
@@ -32,12 +32,13 @@ erosion_kernel = torch.tensor(
 
 
 def generate_ground_truth_with_homography_adaptation(
-    img, net: DeepLSD, num_H=10, H_params=default_H_params, aggregation="median", bs=10
+    img, net: DeepLSD, num_H=100, H_params=default_H_params, aggregation="median", bs=1
 ):
     """Perform homography adaptation at test time using Pytorch.
     Only works with a batch size of 1."""
     assert len(img) == 1, "torch_homography_adaptation only with a batch size of 1."
     # bs = 10
+    img = img.permute(0, 3, 1, 2)
     device = img.device
     h, w = img.shape[2:4]
 
@@ -50,7 +51,7 @@ def generate_ground_truth_with_homography_adaptation(
         else:
             Hs.append(
                 torch.tensor(
-                    sample_homography((h, w), **H_params),
+                    sample_homography_deeplsd((h, w), **H_params),
                     dtype=torch.float,
                     device=device,
                 )

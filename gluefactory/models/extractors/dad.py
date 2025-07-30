@@ -25,12 +25,16 @@ class DadDetector(BaseModel):
 
     def _init(self, conf):
         self.dad_detector = dad.load_DaD()
+        self.max_num_keypoints = conf.max_num_keypoints
+
+        if self.max_num_keypoints == None:
+            self.max_num_keypoints = 1024
 
     def _forward(self, data):
         with torch.no_grad():
             detections = self.dad_detector.detect(
                 {"image": data["image"]}, 
-                num_keypoints=self.conf.max_num_keypoints,
+                num_keypoints=self.max_num_keypoints,
                 return_dense_probs=True
             )
 
