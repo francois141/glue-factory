@@ -25,6 +25,7 @@ from gluefactory.models.utils.metrics_points import (
 )
 from gluefactory.settings import DATA_PATH
 from gluefactory.utils.misc import change_dict_key, sync_and_time
+from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 
 # Parameters for calculating point metrics in validation loss
 default_H_params = {
@@ -322,13 +323,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.deeplsd = deeplsd_net.to(device).eval()
 
-    # Utility methods for line distance-field for (de)normalization
-    def normalize_df(self, df: torch.Tensor) -> torch.Tensor:
-        return -torch.log(df / self.conf.line_neighborhood + 1e-6)
-
-    def denormalize_df(self, df_norm: torch.Tensor) -> torch.Tensor:
-        return torch.exp(-df_norm) * self.conf.line_neighborhood
-
     def _forward(self, data: dict) -> torch.Tensor:
         """
         Perform a forward pass. Certain things are only executed NOT in training mode.
@@ -498,91 +492,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.timings["total-makespan"].append(sync_and_time() - total_start)
         return output
 
-    def weighted_bce_loss(
-        self, prediction: torch.Tensor, target: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Implementation of the weighted BCE loss to cope with class imbalance between keypoint- and non-keypoint pixels.
-        We use this loss for leaning the keypoint heatmap.
-        """
-        epsilon = 1e-6
-        return -self.lambda_valid_kp * target * torch.log(prediction + epsilon) - (
-            1 - target
-        ) * torch.log(1 - prediction + epsilon)
-
-    def focal_loss(
-        self, prediction: torch.Tensor, target: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Implementation of the full-focal loss to cope with class imbalance between keypoint- and non-keypoint pixels and
-        to focus more on hard examples. We use this loss for leaning the keypoint heatmap.
-        """
-        alpha = self.conf.training.loss.kp_loss_parameters.focal_alpha
-        gamma = self.conf.training.loss.kp_loss_parameters.focal_gamma
-        epsilon = 1e-6  # Small value to avoid log(0)
-
-        # Compute the positive and negative parts of the focal loss
-        pos_part = (
-            -alpha * torch.pow(1 - prediction, gamma) * torch.log(prediction + epsilon)
-        )
-        neg_part = (
-            -(1 - alpha)
-            * torch.pow(prediction, gamma)
-            * torch.log(1 - prediction + epsilon)
-        )
-
-        # Combine the parts to get the total loss
-        loss = target * pos_part + (1 - target) * neg_part
-        return loss
-
-    def warp_data(self, df, angle, H, ps: list):
-        h, w = df.shape[1:3]
-        ps = tuple(ps)
-
-        # Warp the closest point on a line
-        pix_loc = (
-            torch.stack(
-                torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij"), dim=-1
-            )
-            .to(df.device)
-            .float()
-        )
-
-        warped_dfs = []
-
-        for i in range(df.shape[0]):
-            with torch.no_grad():  # TODO: could be batched or made simpler to warp the distance field?
-                offset = df[i][:, :, None] * torch.stack(
-                    [torch.sin(angle[i]), torch.cos(angle[i])], dim=-1
-                )
-            closest = pix_loc + offset
-            warped_closest = warp_points_torch(
-                closest.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
-            ).reshape(h, w, 2)
-            warped_pix_loc = warp_points_torch(
-                pix_loc.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
-            ).reshape(h, w, 2)
-
-            offset_norm = torch.linalg.norm(offset, dim=-1)
-            zero_offset = offset_norm < 1e-3
-            offset_norm[zero_offset] = 1
-            scaling = (
-                torch.linalg.norm(warped_closest - warped_pix_loc, dim=-1) / offset_norm
-            )
-            scaling[zero_offset] = 0
-
-            # Warp the DF
-            warped_df = warp_perspective(
-                df[i][None, None], H[i].unsqueeze(0), ps, mode="bilinear"
-            ).squeeze()
-            warped_scaling = warp_perspective(
-                scaling[None, None], H[i].unsqueeze(0), ps, mode="bilinear"
-            ).squeeze()
-            warped_df *= warped_scaling
-
-            warped_dfs.append(warped_df)
-
-        return torch.stack(warped_dfs)
 
     def loss(self, pred: dict, data: dict) -> dict:
         """
@@ -854,6 +763,93 @@ class JointPointLineDetectorDescriptor(BaseModel):
             metrics = self.metrics(pred, data)
         return losses, metrics
 
+
+    def weighted_bce_loss(
+        self, prediction: torch.Tensor, target: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Implementation of the weighted BCE loss to cope with class imbalance between keypoint- and non-keypoint pixels.
+        We use this loss for leaning the keypoint heatmap.
+        """
+        epsilon = 1e-6
+        return -self.lambda_valid_kp * target * torch.log(prediction + epsilon) - (
+            1 - target
+        ) * torch.log(1 - prediction + epsilon)
+
+    def focal_loss(
+        self, prediction: torch.Tensor, target: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Implementation of the full-focal loss to cope with class imbalance between keypoint- and non-keypoint pixels and
+        to focus more on hard examples. We use this loss for leaning the keypoint heatmap.
+        """
+        alpha = self.conf.training.loss.kp_loss_parameters.focal_alpha
+        gamma = self.conf.training.loss.kp_loss_parameters.focal_gamma
+        epsilon = 1e-6  # Small value to avoid log(0)
+
+        # Compute the positive and negative parts of the focal loss
+        pos_part = (
+            -alpha * torch.pow(1 - prediction, gamma) * torch.log(prediction + epsilon)
+        )
+        neg_part = (
+            -(1 - alpha)
+            * torch.pow(prediction, gamma)
+            * torch.log(1 - prediction + epsilon)
+        )
+
+        # Combine the parts to get the total loss
+        loss = target * pos_part + (1 - target) * neg_part
+        return loss
+
+    def warp_data(self, df, angle, H, ps: list):
+        h, w = df.shape[1:3]
+        ps = tuple(ps)
+
+        # Warp the closest point on a line
+        pix_loc = (
+            torch.stack(
+                torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij"), dim=-1
+            )
+            .to(df.device)
+            .float()
+        )
+
+        warped_dfs = []
+
+        for i in range(df.shape[0]):
+            with torch.no_grad():  # TODO: could be batched or made simpler to warp the distance field?
+                offset = df[i][:, :, None] * torch.stack(
+                    [torch.sin(angle[i]), torch.cos(angle[i])], dim=-1
+                )
+            closest = pix_loc + offset
+            warped_closest = warp_points_torch(
+                closest.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
+            ).reshape(h, w, 2)
+            warped_pix_loc = warp_points_torch(
+                pix_loc.reshape(-1, 2).unsqueeze(0), H[i], inverse=False
+            ).reshape(h, w, 2)
+
+            offset_norm = torch.linalg.norm(offset, dim=-1)
+            zero_offset = offset_norm < 1e-3
+            offset_norm[zero_offset] = 1
+            scaling = (
+                torch.linalg.norm(warped_closest - warped_pix_loc, dim=-1) / offset_norm
+            )
+            scaling[zero_offset] = 0
+
+            # Warp the DF
+            warped_df = warp_perspective(
+                df[i][None, None], H[i].unsqueeze(0), ps, mode="bilinear"
+            ).squeeze()
+            warped_scaling = warp_perspective(
+                scaling[None, None], H[i].unsqueeze(0), ps, mode="bilinear"
+            ).squeeze()
+            warped_df *= warped_scaling
+
+            warped_dfs.append(warped_df)
+
+        return torch.stack(warped_dfs)
+
     def get_groundtruth_descriptors(self, pred: dict) -> torch.Tensor:
         """
         Takes keypoints from predictions + computes ground-truth descriptors for it.
@@ -954,44 +950,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         Returns: dict, containing the computed metrics
         """
         return {}
-        device = pred["keypoint_and_junction_score_map"].device
-        gt = data["superpoint_heatmap"].cpu().numpy()
-        predictions = pred["keypoint_and_junction_score_map"].cpu().numpy()
-        # Compute the precision and recall
-        warped_outputs, Hs = self._get_warped_outputs(data)
-        warped_predictions = (
-            warped_outputs["keypoint_and_junction_score_map"].cpu().numpy()
-        )
-
-        precision, recall, _ = compute_pr(gt, predictions)
-        loc_error_points = compute_loc_error(gt, predictions)
-        rep_points = compute_repeatability(predictions, warped_predictions, Hs)
-        out = {
-            "precision": torch.tensor(
-                precision.copy(), dtype=torch.float, device=device
-            ),
-            "recall": torch.tensor(recall.copy(), dtype=torch.float, device=device),
-            "repeatability_points": torch.tensor(
-                [rep_points], dtype=torch.float, device=device
-            ),
-            "loc_error_points": torch.tensor(
-                [loc_error_points], dtype=torch.float, device=device
-            ),
-        }
-        if "lines" in warped_outputs:
-            lines = pred["lines"]
-            warped_lines = warped_outputs["lines"]
-            rep_lines, loc_error_lines = get_rep_and_loc_error(
-                lines, warped_lines, Hs, predictions[0].shape, [50], [3]
-            )
-            out["repeatability_lines"] = torch.tensor(
-                rep_lines, dtype=torch.float, device=device
-            )
-            out["loc_error_lines"] = torch.tensor(
-                loc_error_lines, dtype=torch.float, device=device
-            )
-
-        return out
 
     def _get_warped_outputs(self, data: dict) -> tuple[dict, list[torch.Tensor]]:
         """
@@ -1020,114 +978,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
             warped_outputs = self({"image": warped_imgs})
         return warped_outputs, Hs
 
+    # Utility methods for line distance-field for (de)normalization
+    def normalize_df(self, df: torch.Tensor) -> torch.Tensor:
+        return -torch.log(df / self.conf.line_neighborhood + 1e-6)
 
-def compute_matches(
-    keypoints_imA: torch.Tensor,
-    keypoints_imB: torch.Tensor,
-    H: torch.Tensor,
-    matching_threshold: float = 3.0,
-    best_match_only: bool = False,
-) -> torch.Tensor:
-    """
-    Projects keypoints from image B to image A using a homography matrix H.
-    Returns a list of matches for kp projected from B to A to all Points in A.
-    if best match only - find best matching keypoint in img A for projected kp from B to A
-    Args:
-        keypoints_imA: keypoints in image A (B, N_A, 2)
-        keypoints_imB: keypoints in image B (B, N_B, 2)
-        H: homography matrix from image A to image B (B, 3, 3)
-        matching_threshold: the threshold for a keypoint to be considered a match for another
-    Returns:
-        Tensor: (M, 3) where M is the number of matches (0 or 1 for best match). Each row (batch_idx, keypoint_idx_imA, keypoint_idx_imB)
-    """
-    # Warp detected Kp from Image B to Image A
-    warped_points = warp_points_torch(keypoints_imB, H, inverse=True)  # (B, N_B, 2)
-    # Compute distance for each warped point p_BA to all points P_A
-    # keypoints_imA[:, :, None, :] -> (B, N_A, 1, 2)
-    # warped_points[:, None, :, :] -> (B, 1, N_B, 2)
-    # Broadcasting results in -> (B, N_A, N_B, 2)
-    # After norm computation -> (B, N_A, N_B)
-    dists = torch.linalg.norm(
-        keypoints_imA[:, :, None, :] - warped_points[:, None, :, :], axis=-1
-    )  # (B, N_A, N_BA)
-
-    if best_match_only:
-        # For each keypoint in B, find the closest keypoint in A
-        min_dists, best_matches_A = torch.min(
-            dists, dim=1
-        )  # both (B, N_B) idx + value of best match
-        valid_matches = min_dists < matching_threshold  # (B, N_B)
-
-        # Get batch indices, and kp indices, of kp in B and corresponding kp indices in imA indices
-        batch_idx, idx_B = torch.where(
-            valid_matches
-        )  # both: (M,) where M = number of valid matches (here its only 0 or 1)
-        idx_A = best_matches_A[batch_idx, idx_B]  # (M,)
-
-        matches = torch.stack([batch_idx, idx_A, idx_B], dim=1)
-    else:
-        batch_idx, idx_A, idx_B = torch.where(
-            dists < matching_threshold
-        )  # all: (M,), M=num-matches
-        matches = torch.stack([batch_idx, idx_A, idx_B], dim=1)  # (M, 3)
-
-    return matches  # (M, 3)
-
-
-def sparse_nre_loss(
-    descriptors1: torch.Tensor,
-    descriptors2: torch.Tensor,
-    matches: torch.Tensor,
-    temperature: float = 0.1,
-):
-    """
-    Compute the Sparse Neural Reprojection Error (NRE) loss for batched input.
-    For each keypoint in A (descr 1), get softmax out of best matching keypoint projected from B (descr 2) to A.
-    For this to work, the number of keypoints and tus matches must be the same for all samples in the batch.
-
-    Args:
-        descriptors1 (torch.Tensor): Descriptors from image 1 (B, N1, D).
-        descriptors2 (torch.Tensor): Descriptors from image 2 (B, N2, D).
-        matches (torch.Tensor): shape (M, 3) where each row contains
-                               (batch_idx, idx_kp_desc1, idx_kp_desc2).
-        temperature (float): Temperature scaling factor for the softmax.
-
-    Returns:
-        torch.Tensor: Computed Sparse NRE loss (scalar), here we return scalar loss as per sample calculation would be
-                      way less efficient (need to build loss vector for later after return)
-    """
-    # if there is no match return 0
-    if matches.shape[0] == 0:
-        return torch.tensor(0.0, device=descriptors1.device, requires_grad=True)
-
-    # Extract batch indices and keypoint indices
-    batch_idx = matches[:, 0]  # (M,)
-    kp_idx1 = matches[:, 1]  # (M,)
-    kp_idx2 = matches[:, 2]  # (M,)
-
-    # Batch wise similarity calculation (need softmax prob over all descr of img 2 for kp in img 1)
-    # Extract matched descriptors from image 1 -> For each kp in Im1 for that a match exists, get descriptor
-    desc1_matched = descriptors1[batch_idx, kp_idx1]  # (M, D)
-    M = matches.shape[0]
-
-    # For each match, we need descriptors for whole image of respective sample -> (M, N2, D)
-    desc2_expanded = descriptors2[batch_idx]  # (M, N2, D)
-
-    # Expand desc1_matched to match: (M, D) -> (M, 1, D)
-    desc1_expanded = desc1_matched.unsqueeze(1)  # (M, 1, D)
-
-    # Compute similarities: (M, 1, D) @ (M, D, N2) -> (M, 1, N2)
-    similarities = torch.bmm(
-        desc1_expanded, desc2_expanded.transpose(-2, -1)
-    )  # (M, 1, N2)
-    similarities = similarities.squeeze(1)  # (M, N2)
-
-    # Subtract 1 and apply temperature scaling, then apply softmax along N2 dimension
-    softmax_probs = torch.softmax((similarities - 1) / temperature, dim=1)  # (M, N2)
-
-    # Get probabilities for correct matches using advanced indexing
-    correct_match_probs = softmax_probs[torch.arange(M), kp_idx2]  # (M,)
-
-    # Compute negative log likelihood
-    loss = -torch.log(correct_match_probs + 1e-8).mean()
-    return loss
+    def denormalize_df(self, df_norm: torch.Tensor) -> torch.Tensor:
+        return torch.exp(-df_norm) * self.conf.line_neighborhood
