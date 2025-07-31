@@ -13,6 +13,7 @@ from gluefactory.geometry.kp_losses import soft_argmax_only_loss
 from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.models import get_model
 from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_cfgs
+from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
@@ -59,6 +60,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
     )
 
     default_conf = {
+        "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
         "aliked_model_name": "aliked-n16",  # ALIKED model determining architecture of our backbone
         "use_line_anglefield": False,  # if false, model will be initialized without AF branch and AF isn't considered in inference or training
         "line_df_decoder_channels": 32,
@@ -155,7 +157,16 @@ class JointPointLineDetectorDescriptor(BaseModel):
         M = aliked_model_cfg["M"]
         self.lambda_valid_kp = conf.training.loss.kp_loss_parameters.lambda_weighted_bce
         # Load Network Components
-        self.encoder_backbone = AlikedEncoder(aliked_model_cfg)
+        logger.info(f"Using {self.conf.backbone} backbone")
+        if self.conf.backbone == "vit" or True:
+            self.encoder_backbone = VITBackbone()
+        elif self.conf.backbone == "aliked":
+            self.encoder_backbone = AlikedEncoder(
+                aliked_model_cfg
+            )
+        else:
+            print("Unknown backbone")
+            raise NotImplementedError
         self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
         self.dkd = DKD(  # heuristic point-detection with subpixel refinement from ALIKE (remove border points, nms, refinement)
             radius=conf.nms_radius,
@@ -278,7 +289,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 }
 
             self.load_state_dict(
-                chkpt_statedict["model"], strict=True
+                chkpt_statedict["model"], strict=False
             )  # set to True to check if all keys are present (mlp weights are not present as we removed them above)
         elif conf.checkpoint is not None:
             chkpt_statedict = torch.hub.load_state_dict_from_url(

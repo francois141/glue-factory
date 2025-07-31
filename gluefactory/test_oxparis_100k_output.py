@@ -77,8 +77,7 @@ def visualize_img_with_gt(name, elem, num=5, offset=0, lim_kpoints=-1):
     plt.close()
 
 # Command to launch it
-# python -m gluefactory.test_oxparis_100k_output --conf gluefactory/configs/benchmark_jpl_lsd.yaml 
-# python -m gluefactory.test_oxparis_100k_output --conf gluefactory/configs/train_jpl_oxparis_base.yaml 
+# python -m gluefactory.test_oxparis_100k_output --conf gluefactory/configs/visualise_jpl_output.yaml 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf", type=str, default=None)
@@ -97,10 +96,10 @@ if __name__ == "__main__":
     print("Train dataset loaded")
 
     print("Loading model")
-    jpldd_model = load_model(conf.model.extractor, "/home/francois/Bureau/glue-factory/outputs/training/TEST_TRAIN").to("cpu")
+    jpldd_model = load_model(conf.model.extractor, "/home/francois/Bureau/glue-factory/outputs/training/TRAIN_base_vit").to("cpu")
     jpldd_model.eval()
 
-    jpldd_model_2 = load_model(conf.model.extractor, "/home/francois/Bureau/glue-factory/outputs/training/TRAIN_100k_DISTRIBUTED_4").to("cpu")
+    jpldd_model_2 = load_model(conf.model.extractor, "/home/francois/Bureau/glue-factory/outputs/training/TRAIN_100k_VIT").to("cpu")
     jpldd_model_2.eval()
     print("Model loaded")
 

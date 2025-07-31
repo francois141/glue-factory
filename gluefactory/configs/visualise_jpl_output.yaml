@@ -20,6 +20,7 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
   name: two_view_pipeline
   extractor:
     name: extractors.joint_point_line_extractor
+    backbone: "vit"
     max_num_keypoints: 2048  # setting for training, for eval: -1
     detection_threshold: 0.0 # set to <= 0 for training, for eval without fixed num of kp, do set to a good value
     nms_radius: 3
@@ -32,7 +33,7 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
         do: True
         conf:
           faster_lsd: False
-    checkpoint: /home/francois/Bureau/glue-factory/outputs/training/TEST_TRAIN/checkpoint_best.tar
+    checkpoint: null # /home/francois/Bureau/glue-factory/outputs/training/TEST_TRAIN/checkpoint_best.tar
   matcher:
     # select matcher needed for the benchmark - ex matchers.nearest_neighbor_matcher for point benchmarks
     name: matchers.line_matcher
