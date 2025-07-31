@@ -219,7 +219,7 @@ class HPatchesPipeline(EvalPipeline):
                     lines_images_1 = pred["lines1"].flip(-1)
 
                     plot_lines(lines=[lines_images_0, lines_images_1])
-                    save_plot(os.path.join(f"./match_score/{pipeline.conf.model.checkpoint.split("/")[-2]}/", f"{i}.jpg"))
+                    save_plot(os.path.join(f"./match_score/{pipeline.conf.model.checkpoint.split('/')[-2]}/", f"{i}.jpg"))
                     plt.close()
 
             for k, v in results_i.items():
@@ -249,7 +249,7 @@ class HPatchesPipeline(EvalPipeline):
         figures = {}
         return summaries, figures, results
 
-# Command to run: python -m gluefactory.eval.hpatches_lines   --conf gluefactory/configs/benchmark_jpl_lsd.yaml 
+
 if __name__ == "__main__":
     dataset_name = Path(__file__).stem
     parser = get_eval_parser()
