@@ -21,7 +21,7 @@ OUTPUT_DIR=$DIR/eval/fast_lsd_eval
 
 echo "Evaluation on HPatches Dataset - raw lsd vs fast lsd"
 
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/lsd+LM.yaml --overwrite > "${OUTPUT_DIR}l/hpatches_raw_lsd.txt"
+python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_raw_lsd.txt"
 python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/fastlsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_raw_fastlsd.txt"
 
 echo "Evaluation on RDNIM Dataset - raw lsd vs fast lsd"
