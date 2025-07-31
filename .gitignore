@@ -18,3 +18,5 @@ checkpoints
 slurm*
 /jpl_scripts/eval/
 eval/
+
+/dataset/revisitop1m/
