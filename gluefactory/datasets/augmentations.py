@@ -217,6 +217,70 @@ class DarkAugmentation(BaseAugmentation):
             ),
         ]
 
+class AggressiveLightingAugmentation(BaseAugmentation):
+    default_conf = {"p": 0.9}
+
+    def _init(self, conf):
+        self.transforms = [
+            # Brightness & Contrast (more aggressive, both directions)
+            A.RandomBrightnessContrast(
+                p=0.8,
+                brightness_limit=(-0.6, 0.6),
+                contrast_limit=(-0.5, 0.5),
+            ),
+
+            # Random gamma (darkening/lightening effect)
+            A.RandomGamma(p=0.6, gamma_limit=(30, 150)),
+
+            # Add shadows or brighten patches
+            A.RandomShadow(p=0.3),
+
+            # Color distortions
+            A.OneOf([
+                A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.5),
+                A.HueSaturationValue(hue_shift_limit=25, sat_shift_limit=35, val_shift_limit=35, p=0.5),
+                A.ChannelShuffle(p=0.3),
+            ], p=0.7),
+
+            # Histogram-level changes
+            A.OneOf([
+                A.Equalize(p=0.3),
+                A.CLAHE(p=0.3),
+                A.RandomToneCurve(scale=0.3, p=0.3),
+            ], p=0.5),
+
+            # Noise & Compression
+            A.OneOf([
+                A.ISONoise(color_shift=(0.01, 0.1), intensity=(0.2, 0.5), p=0.5),
+                A.MultiplicativeNoise(multiplier=(0.8, 1.2), per_channel=True, p=0.5),
+                A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+            ], p=0.6),
+            A.ImageCompression(quality_lower=10, quality_upper=40, p=0.4),
+            A.Downscale(scale_min=0.3, scale_max=0.7, interpolation=1, p=0.3),
+
+            # Blurring
+            A.OneOf([
+                A.Blur(blur_limit=(3, 9), p=0.3),
+                A.MotionBlur(blur_limit=(5, 25), p=0.5),
+                A.MedianBlur(blur_limit=7, p=0.2),
+            ], p=0.5),
+
+            # Fog, Rain, or other weather simulation
+            A.OneOf([
+                A.RandomRain(p=0.5, drop_length=20, blur_value=3),
+                A.RandomFog(p=0.3, fog_coef_lower=0.2, fog_coef_upper=0.5),
+                A.RandomSnow(p=0.2, brightness_coeff=1.2),
+            ], p=0.4),
+
+            # Stylization (optional)
+            A.OneOf([
+                A.ToGray(p=0.3),
+                A.ToSepia(p=0.2),
+                A.Solarize(p=0.2),
+                A.InvertImg(p=0.1),
+            ], p=0.4),
+        ]
+
 
 class LGAugmentation(BaseAugmentation):
     default_conf = {"p": 0.95}
@@ -246,5 +310,6 @@ class LGAugmentation(BaseAugmentation):
 augmentations = {
     "dark": DarkAugmentation,
     "lg": LGAugmentation,
+    "aggressive": AggressiveLightingAugmentation,
     "identity": IdentityAugmentation,
 }
