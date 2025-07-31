@@ -89,18 +89,25 @@ class DPT(BaseModel):
         return out
 
 class DPTFieldModel(DPT):
-    def __init__(self, path=None, non_negative=True, head_size=[[3],[1],[1],[2],[2]], **kwargs):
+    def __init__(self, path=None, non_negative=True, head_size=[[3],[1],[1],[2],[2]],upsample=False, **kwargs):
         features = kwargs["features"] if "features" in kwargs else 256
 
         kwargs["use_bn"] = True
 
         num_class = sum(sum(head_size,[]))
-        head = nn.Sequential(
-            nn.Conv2d(features, features//2, kernel_size=3, stride=1, padding=1),
-            # nn.BatchNorm2d(features//2),
+        layers = [
+            nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(features // 2),
             nn.ReLU(True),
-            MultitaskHead(features//2, num_class, head_size=head_size),
-        )
+            MultitaskHead(features // 2, num_class, head_size=head_size),
+        ]
+
+        if upsample:
+            layers.append(
+                nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
+            )
+
+        head = nn.Sequential(*layers)
 
         super().__init__(head, **kwargs)
 
