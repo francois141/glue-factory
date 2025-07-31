@@ -9,6 +9,7 @@ def build_dpt(
     enable_attention_hooks = False,
     head_size = [[3],[1],[1],[2],[2]],
     use_layer_scale = False,
+    upsample = False,
     **kwargs):
     
     model = DPTFieldModel(
@@ -19,7 +20,8 @@ def build_dpt(
         use_bn=use_bn,
         enable_attention_hooks=enable_attention_hooks,
         head_size=head_size,
-        use_layer_scale=use_layer_scale
+        use_layer_scale=use_layer_scale,
+        upsample=upsample,
     )
 
     return model
