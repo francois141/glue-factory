@@ -147,6 +147,7 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
         augmentation_map = {
             "dark": augmentations.DarkAugmentation,
             "lg": augmentations.LGAugmentation,
+            "aggressive": augmentations.AggressiveLightingAugmentation,
             "identity": augmentations.IdentityAugmentation,
         }
 
@@ -401,8 +402,6 @@ class _Dataset(torch.utils.data.Dataset):
         img = self._read_image(folder_path)
 
         if self.conf.load_features.augment.do:
-            print("Check this holds as well for this dataset")
-            raise NotImplemented
             try:
                 img = img.numpy().transpose(1, 2, 0)
                 img = self.augmentation(image=img, return_tensor=True)
