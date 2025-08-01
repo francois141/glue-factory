@@ -14,5 +14,14 @@ source $DIR/common.sh
 
 SetupStack
 
-echo "Starting training"
-python -m gluefactory.train TRAIN_100k_VIT_ALL_PIXELS_5 --conf=gluefactory/configs/train_jpl_oxparis_100k_vit_5_threshold.yaml --distributed
+CONFIG_PATH="$1"
+
+if [ -z "$CONFIG_PATH" ]; then
+  echo "Usage: $0 <config_path.yaml>"
+  exit 1
+fi
+
+CONFIG_NAME=$(basename "$CONFIG_PATH" .yaml)
+
+echo "Starting training with config: $CONFIG_NAME"
+python -m gluefactory.train "$CONFIG_NAME" --conf="$CONFIG_PATH" --distributed
