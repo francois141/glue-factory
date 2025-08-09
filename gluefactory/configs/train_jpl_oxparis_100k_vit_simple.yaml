@@ -34,6 +34,7 @@ model:
     name: joint_point_line_extractor
     model_name: "aliked-n16"
     backbone: "vit"
+    df_branch: "empty"
     line_neighborhood: 5
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # activate subpixel refinement in DKD

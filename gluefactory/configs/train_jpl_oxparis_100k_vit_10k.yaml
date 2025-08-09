@@ -28,7 +28,7 @@ data:
             do: False
             type: "dark" # choose identity, dark or lg
     val_size: 2000
-    train_size: 100000
+    train_size: 10000
     
 model:
     name: joint_point_line_extractor
