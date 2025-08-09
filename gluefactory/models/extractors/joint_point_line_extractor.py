@@ -61,6 +61,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
     default_conf = {
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
+        "df_branch": "base", # options are base and empty
         "aliked_model_name": "aliked-n16",  # ALIKED model determining architecture of our backbone
         "use_line_anglefield": False,  # if false, model will be initialized without AF branch and AF isn't considered in inference or training
         "line_df_decoder_channels": 32,
@@ -158,7 +159,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         self.lambda_valid_kp = conf.training.loss.kp_loss_parameters.lambda_weighted_bce
         # Load Network Components
         logger.info(f"Using {self.conf.backbone} backbone")
-        if self.conf.backbone == "vit" or True:
+        if self.conf.backbone == "vit":
             self.encoder_backbone = VITBackbone()
         elif self.conf.backbone == "aliked":
             self.encoder_backbone = AlikedEncoder(
@@ -184,21 +185,29 @@ class JointPointLineDetectorDescriptor(BaseModel):
         )
         ## Line Attraction Field information (Line Distance Field and Angle Field) ##
         # Line distance field decoder similar to that in DeepLSD
-        self.distance_field_branch = nn.Sequential(
-            nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(conf.line_df_decoder_channels),
-            nn.Conv2d(
-                conf.line_df_decoder_channels,
-                conf.line_df_decoder_channels,
-                kernel_size=3,
-                padding=1,
-            ),
-            nn.ReLU(),
-            nn.BatchNorm2d(conf.line_df_decoder_channels),
-            nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
-            nn.ReLU(),
-        )
+
+        if self.conf.df_branch == "base":
+            self.distance_field_branch = nn.Sequential(
+                nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.BatchNorm2d(conf.line_df_decoder_channels),
+                nn.Conv2d(
+                    conf.line_df_decoder_channels,
+                    conf.line_df_decoder_channels,
+                    kernel_size=3,
+                    padding=1,
+                ),
+                nn.ReLU(),
+                nn.BatchNorm2d(conf.line_df_decoder_channels),
+                nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
+                nn.ReLU(),
+            )
+        else:
+            logger.warning("-- Use (almost) empty distance field branch! --")
+            self.distance_field_branch = nn.Sequential(
+                nn.Conv2d(dim, 1, kernel_size=3, padding=1),
+                nn.ReLU(),
+            )
         # only use line angle-field if configured
         if conf.use_line_anglefield:
             # Angle branch similar to angle field decoder in DeepLSD
