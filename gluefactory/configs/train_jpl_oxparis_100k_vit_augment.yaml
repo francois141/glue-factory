@@ -62,11 +62,11 @@ model:
     checkpoint: null  # if given load model weights from this checkpoint
     timeit: False  # override timeit: False from BaseModel
 train:
-    load_experiment: /cluster/scratch/fcosta/outputs/training/TRAIN_100k_VIT  # initialize the model from a previous experiment (take weights)
+    load_experiment: #/cluster/scratch/fcosta/outputs/training/TRAIN_100k_VIT  # initialize the model from a previous experiment (take weights)
     seed: 7
     epochs: 60
     log_every_iter: 8
-    eval_every_iter: 15000 # automatically creates new checkpoint if new best eval metric is reached -> set > #batches to not eval except at the end of each epoch
+    eval_every_iter: 50000 # automatically creates new checkpoint if new best eval metric is reached -> set > #batches to not eval except at the end of each epoch
     save_every_iter: 10000
     test_every_epoch: -1
     optimizer: "adam"
@@ -77,6 +77,6 @@ train:
         on_epoch: True
         options:
             patience: 5
-    keep_last_checkpoints: 5
+    keep_last_checkpoints: 5000
     submodules: []
 

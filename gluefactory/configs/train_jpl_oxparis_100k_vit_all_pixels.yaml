@@ -34,7 +34,7 @@ model:
     name: joint_point_line_extractor
     model_name: "aliked-n16"
     backbone: "vit"
-    line_neighborhood: 5
+    line_neighborhood: 10
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # activate subpixel refinement in DKD
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches

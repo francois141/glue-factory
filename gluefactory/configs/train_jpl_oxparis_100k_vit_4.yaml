@@ -23,7 +23,7 @@ data:
             use_deeplsd_lineendpoints_as_kp_gt: False  # set true to use deep-lsd line endpoints as keypoint groundtruth
             use_superpoint_kp_gt: True  # set true to use default HA-Superpoint groundtruth
         line_gt:
-            enforce_threshold: 5.0
+            enforce_threshold: 4.0
         augment:  # activate or deactivate data augmentation
             do: False
             type: "dark" # choose identity, dark or lg
@@ -34,7 +34,7 @@ model:
     name: joint_point_line_extractor
     model_name: "aliked-n16"
     backbone: "vit"
-    line_neighborhood: 5
+    line_neighborhood: 4
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # activate subpixel refinement in DKD
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches

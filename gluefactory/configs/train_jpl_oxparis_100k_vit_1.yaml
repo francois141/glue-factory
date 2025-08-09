@@ -23,22 +23,24 @@ data:
             use_deeplsd_lineendpoints_as_kp_gt: False  # set true to use deep-lsd line endpoints as keypoint groundtruth
             use_superpoint_kp_gt: True  # set true to use default HA-Superpoint groundtruth
         line_gt:
-            enforce_threshold: 5.0
+            enforce_threshold: 1.0
         augment:  # activate or deactivate data augmentation
             do: False
             type: "dark" # choose identity, dark or lg
     val_size: 2000
-    train_size: 10000
+    train_size: 100000
     
 model:
     name: joint_point_line_extractor
     model_name: "aliked-n16"
-    line_neighborhood: 5
+    backbone: "vit"
+    line_neighborhood: 1
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # activate subpixel refinement in DKD
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
     training:
         do: True
+        df_only: True
         aliked_pretrained: True
         pretrain_kp_decoder: True
         train_descriptors:
@@ -60,12 +62,12 @@ model:
     checkpoint: null  # if given load model weights from this checkpoint
     timeit: False  # override timeit: False from BaseModel
 train:
-    load_experiment: /cluster/scratch/fcosta/outputs/training/TRAIN_10k_DISTRIBUTED  # initialize the model from a previous experiment (take weights)
+    load_experiment: null #/cluster/scratch/fcosta/outputs/training/TRAIN_100k_DISTRIBUTED  # initialize the model from a previous experiment (take weights)
     seed: 7
-    epochs: 150
+    epochs: 60
     log_every_iter: 8
     eval_every_iter: 15000 # automatically creates new checkpoint if new best eval metric is reached -> set > #batches to not eval except at the end of each epoch
-    save_every_iter: 10000
+    save_every_iter: 50000
     test_every_epoch: -1
     optimizer: "adam"
     best_key: "loss/total" # key used to determine best checkpoint and evaluation progress
@@ -75,6 +77,6 @@ train:
         on_epoch: True
         options:
             patience: 5
-    keep_last_checkpoints: 5
+    keep_last_checkpoints: 50000
     submodules: []
 
