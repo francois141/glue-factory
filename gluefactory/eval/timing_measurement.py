@@ -46,6 +46,7 @@ def run_measurement(
         with torch.no_grad():
             start = sync_and_time()
             pred = model(img)
+            torch.cuda.synchronize()
             end = sync_and_time()
             timings.append((end - start) / batch_size)
         count += batch_size
