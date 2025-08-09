@@ -480,11 +480,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             # Perform forward pass for line detector, batching handled internally
             line_data = {
-                "line_anglefield": line_angle_field.detach().clone(),
-                "line_distancefield": line_distance_field.detach().clone(),
+                "line_anglefield": line_angle_field,
+                "line_distancefield": line_distance_field,
                 "image": image,
-                "keypoints": rescaled_kp.clone(),
-                "kp_descriptors": output["descriptors"].clone(),
+                "keypoints": rescaled_kp,
+                "kp_descriptors": output["descriptors"],
             }
             pred_line_data = self.line_extractor(line_data)
 
