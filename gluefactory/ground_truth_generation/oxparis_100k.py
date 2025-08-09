@@ -255,6 +255,8 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
         analysis_values_mean = []
         analysis_values_max = []
 
+        raster_lines = np.zeros_like(img[:,:,0])
+
         # Loop through all the homographies
         for i in range(num):
             # Generate a random homography
@@ -296,6 +298,8 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
 
             angle = torch.remainder(torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi)
             angles.append(angle)
+
+            raster_lines += (df < 1).cpu().numpy().astype(np.uint8) * count
 
             if is_analysis:
                 new_value = torch.median(torch.stack(df_maps), dim=0).values.cpu().numpy() - previuos
@@ -343,7 +347,13 @@ def ha_df_deeplsd(img, is_analysis, num=100, border_margin=3, min_counts=5):
         angles[counts == 0] = torch.nan
         avg_angle = torch.remainder(torch.nanmedian(angles, axis=0).values, torch.pi).cpu().numpy()
 
-        return avg_df, avg_angle
+
+        # Generate the background mask and a saliency score
+        raster_lines = np.where(raster_lines > min_counts, np.ones_like(img[:,:,0]),
+                                np.zeros_like(img[:,:,0]))
+        raster_lines = cv2.dilate(raster_lines, np.ones((21, 21), dtype=np.uint8))
+        bg_mask = (1 - raster_lines).astype(float)
+        return avg_df, avg_angle, bg_mask
 
 def get_dataset_and_loader(
     num_workers: int, dataset: str, chunk: int
@@ -548,13 +558,16 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8)
 
     # Run homography adaptation
-    df, af = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
+    df, af, background_mask = ha_df_deeplsd(image_numpy,is_analysis, num=num_H)
 
     # Save the distance field
     np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy", df)
 
     # Save the angle field
     np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.npy", af)
+
+    # Save the backround mask
+    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_bgmask.npy", background_mask)
 
 def process_both(img_data, num_H, output_folder_path, is_analysis):
     """
