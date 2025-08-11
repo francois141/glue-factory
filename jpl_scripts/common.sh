@@ -14,5 +14,16 @@ function SetupStack() {
   fi
 
   source $VENV_PATH/bin/activate
+
+  # Print SLURM variables so you see how your resources are allocated
+  echo "[sbatch-master] Job Name: $SLURM_JOB_NAME"
+  echo "[sbatch-master] Job ID: $SLURM_JOB_ID"
+  echo "[sbatch-master] Num Nodes: $SLURM_NNODES"
+  echo "[sbatch-master] Allocated Node(s): $SLURM_NODELIST"
+  echo "[sbatch-master] Number of Tasks: $SLURM_NTASKS"
+  echo "[sbatch-master] MasterNodeID: $SLURM_NODEID"
+  echo "[sbatch-master] Number of GPUs allocated: $SLURM_GPUS_ON_NODE"
+  echo "Current path: $(pwd)"
+  echo "Current user: $(whoami)"
 }
 

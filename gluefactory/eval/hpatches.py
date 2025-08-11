@@ -191,6 +191,17 @@ if __name__ == "__main__":
     experiment_dir.mkdir(exist_ok=True)
 
     pipeline = HPatchesPipeline(conf)
+
+
+    if "checkpoint" in conf.model.extractor:
+        pipeline.conf.model.checkpoint = conf.model.extractor.checkpoint
+        
+    if args.checkpoint is not None:
+        pipeline.conf.model.checkpoint = args.checkpoint
+        pipeline.conf.model.extractor.checkpoint = args.checkpoint
+        name += "_"
+        name += args.checkpoint.split("/")[-2]
+
     s, f, r = pipeline.run(
         experiment_dir, overwrite=args.overwrite, overwrite_eval=args.overwrite_eval
     )
