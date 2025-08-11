@@ -270,7 +270,9 @@ if __name__ == "__main__":
 
     pipeline = HPatchesPipeline(conf)
 
-    pipeline.conf.model.checkpoint = conf.model.extractor.checkpoint
+    if "checkpoint" in conf.model.extractor:
+        pipeline.conf.model.checkpoint = conf.model.extractor.checkpoint
+
     if args.checkpoint is not None:
         pipeline.conf.model.checkpoint = args.checkpoint
         pipeline.conf.model.extractor.checkpoint = args.checkpoint
