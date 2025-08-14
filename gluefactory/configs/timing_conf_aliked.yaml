@@ -9,8 +9,8 @@ model:
     nms_radius: 3
     training:
       do: False
-    backbone: "vit"
-    checkpoint:  /cluster/scratch/fcosta/outputs/training/TRAIN_100k_VIT/checkpoint_best.tar
+    backbone: "aliked"
+    checkpoint:  /home/francois/Bureau/glue-factory/outputs/training/train_jpl_oxparis_base/checkpoint_best.tar
     timeit: True  # setting it to True -> gives 4-5 fps less performance
     line_detection:
       do: True
