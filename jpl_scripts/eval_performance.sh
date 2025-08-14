@@ -20,4 +20,4 @@ OUTPUT_FILE=$DIR/eval/performance/output.txt
 
 echo "Evaluate performance of the JPL model on Oxford Paris Mini dataset"
 
-python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_conf.yaml --num_s=100 --device=cuda > $OUTPUT_FILE
+python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_conf_aliked.yaml --num_s=100 --device=cuda > $OUTPUT_FILE

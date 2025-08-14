@@ -106,6 +106,7 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
         augmentation_map = {
             "dark": augmentations.DarkAugmentation,
             "lg": augmentations.LGAugmentation,
+            "aggressive": augmentations.AggressiveLightingAugmentation,
             "identity": augmentations.IdentityAugmentation,
         }
 

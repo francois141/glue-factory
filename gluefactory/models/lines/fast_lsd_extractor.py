@@ -3,11 +3,12 @@ from typing import Optional
 import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
-from pytlsd import lsd
+from pytlsd import lsd, lsd_from_points
 
 from gluefactory.models.lines.line_refinement import filter_outlier_lines, merge_lines
 from gluefactory.models.lines.line_utils import preprocess_angle
 from gluefactory.utils.image import compute_image_grad
+import torchvision.transforms as T
 
 from ..base_model import BaseModel
 
@@ -30,6 +31,9 @@ class FastLSDLineExtractor(BaseModel):
         "faster_lsd": True,
         "return_line_descriptors": False,
         "trainable": False,
+        "sigma": 0.6,
+        "threshold_value": 5.2262518595055063,
+        "kernel_size": 7,
     }
     required_data_keys = ["image"]
 
@@ -43,6 +47,59 @@ class FastLSDLineExtractor(BaseModel):
             raise NotImplementedError(
                 "Line descriptors are not implemented yet for FasterLSD"
             )
+        
+    def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
+
+        # GaussianBlur: kernel size must be odd and positive
+        blur = T.GaussianBlur(kernel_size=self.conf.kernel_size, sigma=self.conf.sigma)
+
+        # Apply blur
+        in_tensor = blur(in_tensor.unsqueeze(0))[0]
+
+        H, W = in_tensor.shape
+        com1 = in_tensor[1:-1, 1:-1] - in_tensor[:-2, :-2]
+        com2 = in_tensor[:-2, 1:-1] - in_tensor[1:-1, :-2]
+
+        gx = com1 + com2
+        gy = com1 - com2
+        norm2 = gx * gx + gy * gy
+        norm = torch.sqrt(norm2 / 4.0)
+
+        out = torch.zeros_like(in_tensor)
+        out[1:-1, 1:-1] = norm
+
+        # Compute angle where norm > threshold
+        threshold = self.conf.threshold_value
+        mask = norm > threshold
+
+        # atan2(-gx, gy) for pixels where norm > threshold
+        angle_vals = torch.atan2(-gx[mask], gy[mask])
+
+        # Insert angles back in output angle tensor
+        out_angle = torch.zeros_like(in_tensor).to(torch.float)
+        out_angle[1:-1, 1:-1][mask] = angle_vals
+
+        return out, out_angle
+
+
+    def extract_points(self, df: torch.Tensor):
+
+        # Find positions where df > 0
+        positions = (df > torch.quantile(df.to(torch.float), 0.75)).nonzero(as_tuple=False)  # shape [num_points, 2]
+
+        # Gather intensities at those positions
+        intensities = df[positions[:, 0], positions[:, 1]]
+
+        # Sort intensities in descending order
+        sorted_indices = torch.argsort(intensities, descending=True)
+        positions_sorted = positions[sorted_indices]
+
+        # Swap columns to get [x, y] instead of [row, col] and flatten
+        keypoints_importants = positions_sorted[:, [1, 0]].contiguous()
+
+        # Limit to first 100000 keypoints
+        return keypoints_importants[:100000]
+
 
     def detect_lines(
         self, img, df, line_level = None
@@ -59,7 +116,21 @@ class FastLSDLineExtractor(BaseModel):
         img_grad_angle = None
         gradnorm = torch.clamp(5.0 - df, min=0.0).to(torch.float64)
 
-        if self.conf.faster_lsd:
+
+        with_points = True
+
+        if with_points:
+            gradient, angle = self.compute_gradient_2d_noborder(img)
+            interests_points = self.extract_points(gradient)
+            lines = lsd_from_points(
+                img.cpu().numpy().astype(np.float64), 
+                interests_points.cpu().numpy().astype(np.float64),
+                scale=1.0,         
+                gradnorm=gradnorm.cpu().numpy(), 
+                gradangle=angle.cpu().numpy(), 
+                grad_nfa=False
+            )[:, :4].reshape(-1, 2, 2)
+        elif self.conf.faster_lsd and False:
             lines = fast_lsd(
                 img.cpu().numpy().astype(np.float64),
                 scale=1.0,
@@ -71,7 +142,7 @@ class FastLSDLineExtractor(BaseModel):
                 img.cpu().numpy().astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm.cpu().numpy(),
-                grad_nfa=self.conf.grad_nfa,
+                grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
 
 

@@ -2,9 +2,10 @@ import numpy as np
 import torch
 import time
 from joblib import Parallel, delayed
-from pytlsd import lsd
+from pytlsd import lsd, lsd_from_points
 from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
+import torchvision.transforms as T
 
 from ..base_model import BaseModel
 
@@ -24,9 +25,51 @@ class LSD(BaseModel):
             assert (
                 self.conf.max_num_lines is not None
             ), "Missing max_num_lines parameter"
+
+    def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
+
+        # GaussianBlur: kernel size must be odd and positive
+        blur = T.GaussianBlur(kernel_size=7, sigma=0.75)
+
+        # Apply blur
+        in_tensor = blur(in_tensor.unsqueeze(0))[0]
+
+        H, W = in_tensor.shape
+        com1 = in_tensor[1:-1, 1:-1] - in_tensor[:-2, :-2]
+        com2 = in_tensor[:-2, 1:-1] - in_tensor[1:-1, :-2]
+
+        gx = com1 + com2
+        gy = com1 - com2
+        norm2 = gx * gx + gy * gy
+        norm = torch.sqrt(norm2 / 4.0)
+
+        out = torch.zeros_like(in_tensor).to(torch.float32)
+        out[1:-1, 1:-1] = norm
+
+        return out
+
+    def extract_points(self, gradnorm: torch.Tensor):
+        gradnorm = gradnorm.cpu().numpy()
+
+        positions = np.argwhere(gradnorm > 0)  
+
+        intensities = gradnorm[positions[:, 0], positions[:, 1]]
+
+        sorted_indices = np.argsort(-intensities)
+        positions_sorted = positions[sorted_indices]
+
+        keypoints_importants = positions_sorted[:, [1, 0]].astype(int).flatten().reshape(-1, 2)
+
+        np.random.shuffle(keypoints_importants) 
+
+        return keypoints_importants#[:100000]
+
     def detect_lines(self, img):
         start = time.perf_counter()
         # Run LSD
+
+        with_gpu_gradnorm = False
+
         if 'search' in self.conf and self.conf.search:
             segs = params_lsd(
                 img,
@@ -39,6 +82,10 @@ class LSD(BaseModel):
             )
         elif self.conf.faster_lsd:
             segs = fast_lsd(img)
+        elif with_gpu_gradnorm:
+            gradient = self.compute_gradient_2d_noborder(torch.tensor(img))
+            interests_points = self.extract_points(gradient)
+            segs = lsd_from_points(img, interests_points)
         else:
             segs = lsd(img)
         end = time.perf_counter()
