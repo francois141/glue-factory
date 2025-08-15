@@ -15,8 +15,10 @@ from ..utils.misc import pad_and_stack
 import dad
 from PIL import Image
 
-class SuperPoint(BaseModel):
-    default_conf = {}
+class DadDetector(BaseModel):
+    default_conf = {
+        "max_num_keypoints": 1024,
+    }
 
     def is_initialized(self):
         return True
@@ -28,7 +30,7 @@ class SuperPoint(BaseModel):
         with torch.no_grad():
             detections = self.dad_detector.detect(
                 {"image": data["image"]}, 
-                num_keypoints=512,
+                num_keypoints=self.conf.max_num_keypoints,
                 return_dense_probs=True
             )
 
