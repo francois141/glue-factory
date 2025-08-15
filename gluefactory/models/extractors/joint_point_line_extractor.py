@@ -77,6 +77,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "df_only": False, # train only distance field
             "aliked_pretrained": True,  # use pretrained ALIKED weights in backbone encoder
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
+            "sharpen_df": True,
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
                 "gt_aliked_model": "aliked-n32",
                 "use_one_view_loss": True,  # In one view training can decide if train descriptors with this flag
@@ -567,17 +568,25 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
-            line_df_loss = F.l1_loss(
-                self.normalize_df(prediction_dict["line_distancefield"])
-                * df_gt_mask_view0
-                * padding_mask_view0,
-                self.normalize_df(gt_dict_view0["deeplsd_distance_field"])
-                * df_gt_mask_view0
-                * padding_mask_view0,
-                # only supervise in line neighborhood
-                reduction="none",
-            ).mean(dim=(1, 2))
-            losses["one_view_line_df"] = line_df_loss
+            line_df = prediction_dict["line_distancefield"]
+            deeplsd_line_df =  gt_dict_view0["deeplsd_distance_field"]
+            
+            if self.conf.training.sharpen_df:
+                losses["one_view_line_df"] = F.l1_loss(
+                    self.normalize_df(line_df)
+                    * df_gt_mask_view0
+                    * padding_mask_view0,
+                    self.normalize_df(deeplsd_line_df)
+                    * df_gt_mask_view0
+                    * padding_mask_view0,
+                    # only supervise in line neighborhood
+                    reduction="none",
+                ).mean(dim=(1, 2))
+            else:
+                losses["one_view_line_df"] = F.l1_loss(
+                    line_df, deeplsd_line_df, reduction="none"
+                ).mean(dim=(1, 2))
+
             losses["total"] += (
                 self.conf.training.loss.loss_weights.one_view_line_df_weight
                 * line_df_loss
