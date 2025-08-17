@@ -24,6 +24,7 @@ from gluefactory.models.utils.metrics_points import (
     compute_pr,
     compute_repeatability,
 )
+from gluefactory.models.extractors.dad_distill import DadDistillDetector
 from gluefactory.settings import DATA_PATH
 from gluefactory.utils.misc import change_dict_key, sync_and_time
 from gluefactory.models.extractors.joint_point_line_extractor_utils import *
@@ -144,6 +145,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "weighted_bce",
             "focal_loss",
             "bce",
+            "distill",
         ]
         if self.conf.training.loss.kp_loss_name == "weighted_bce":
             self.loss_fn = self.weighted_bce_loss
@@ -343,6 +345,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
             deeplsd_net.load_state_dict(ckpt["model"])
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.deeplsd = deeplsd_net.to(device).eval()
+
+        if self.conf.training.loss.kp_loss_name == "distill":
+            # Use dad distillation
+            self.dad_distil = DadDistillDetector({
+                "max_num_keypoints": 1024,
+            })
 
     def _forward(self, data: dict) -> torch.Tensor:
         """
@@ -600,10 +608,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
-            keypoint_scoremap_loss = self.loss_fn(
-                prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
-                gt_dict_view0["superpoint_heatmap"] * padding_mask_view0,
-            ).mean(dim=(1, 2))
+            if self.conf.training.loss.kp_loss_name == "distill": 
+                keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
+            else:
+                keypoint_scoremap_loss = self.loss_fn(
+                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    gt_dict_view0["superpoint_heatmap"] * padding_mask_view0,
+                ).mean(dim=(1, 2))
+
             losses["one_view_kp_scoremap"] = keypoint_scoremap_loss
             losses["total"] += (
                 self.conf.training.loss.loss_weights.keypoint_weight
