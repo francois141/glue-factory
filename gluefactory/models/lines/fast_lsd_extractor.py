@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
-from pytlsd import lsd, lsd_from_points
+from pytlsd import lsd, lsd_from_points, lsd_df, lsd_opt
 
 from gluefactory.models.lines.line_refinement import filter_outlier_lines, merge_lines
 from gluefactory.models.lines.line_utils import preprocess_angle
@@ -28,12 +28,12 @@ class FastLSDLineExtractor(BaseModel):
         "grad_nfa": True,
         "filtering": "normal",
         "grad_thresh": 3,
-        "faster_lsd": True,
         "return_line_descriptors": False,
         "trainable": False,
         "sigma": 0.6,
         "threshold_value": 5.2262518595055063,
         "kernel_size": 7,
+        "lsd_type": "default",
     }
     required_data_keys = ["image"]
 
@@ -47,6 +47,9 @@ class FastLSDLineExtractor(BaseModel):
             raise NotImplementedError(
                 "Line descriptors are not implemented yet for FasterLSD"
             )
+
+        # Currently we have 5 types of lsd entries
+        assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
         
     def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
 
@@ -116,33 +119,54 @@ class FastLSDLineExtractor(BaseModel):
         img_grad_angle = None
         gradnorm = torch.clamp(5.0 - df, min=0.0).to(torch.float64)
 
-
-        with_points = True
-
-        if with_points:
+        # Lsd types: default, old, best, fast, point
+        if self.conf.lsd_type == "default":
+            lines = lsd_df(
+                img.detach().cpu().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradnorm.detach().cpu().numpy(),
+                grad_nfa=False,
+            )[:, :4].reshape(-1, 2, 2)
+        elif self.conf.lsd_type == "old":
+            # Compute grad angle old style
+            img_grad_angle = compute_image_grad(img.detach().cpu().numpy())[3]
+            angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
+            angle[gradnorm < self.conf.grad_thresh] = -1024
+            lines = lsd(
+                img.detach().cpu().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradnorm.detach().cpu().numpy(),
+                gradangle=angle,
+                grad_nfa=False,
+            )[:, :4].reshape(-1, 2, 2)
+        elif self.conf.lsd_type == "best":
+            gradient, angle = self.compute_gradient_2d_noborder(img)
+            lines = lsd_opt(
+                img.cpu().detach().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradnorm.detach().cpu().numpy(),
+                gradangle=angle.detach().cpu().numpy(),
+                grad_nfa=False
+            )[:, :4].reshape(-1, 2, 2)
+        elif self.conf.lsd_type == "fast":
+            gradient, angle = self.compute_gradient_2d_noborder(img)
+            lines = fast_lsd(
+                img.detach().cpu().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradnorm.detach().cpu().numpy(),
+                gradangle=angle.detach().cpu().numpy(),
+                grad_nfa=self.conf.grad_nfa,
+            )[:, :4].reshape(-1, 2, 2)
+        elif self.conf.lsd_type == "points":
             gradient, angle = self.compute_gradient_2d_noborder(img)
             interests_points = self.extract_points(gradient)
             lines = lsd_from_points(
-                img.cpu().numpy().astype(np.float64), 
-                interests_points.cpu().numpy().astype(np.float64),
-                scale=1.0,         
-                gradnorm=gradnorm.cpu().numpy(), 
-                gradangle=angle.cpu().numpy(), 
+                img.detach().cpu().numpy().astype(np.float64),
+                interests_points.detach().cpu().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradnorm.detach().cpu().numpy(),
+                gradangle=angle.detach().cpu().numpy(),
                 grad_nfa=False
-            )[:, :4].reshape(-1, 2, 2)
-        elif self.conf.faster_lsd and False:
-            lines = fast_lsd(
-                img.cpu().numpy().astype(np.float64),
-                scale=1.0,
-                gradnorm=gradnorm.cpu().numpy(),
-                grad_nfa=self.conf.grad_nfa,
-            )[:, :4].reshape(-1, 2, 2)
-        else:
-            lines = lsd(
-                img.cpu().numpy().astype(np.float64),
-                scale=1.0,
-                gradnorm=gradnorm.cpu().numpy(),
-                grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
 
 

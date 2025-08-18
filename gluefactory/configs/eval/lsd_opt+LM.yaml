@@ -2,7 +2,7 @@ model:
   name: two_view_pipeline
   extractor:
     name: lines.lsd
-    run_type: fast
+    run_type: optimal
   matcher:
     name: matchers.line_matcher
     line_dist: orth
