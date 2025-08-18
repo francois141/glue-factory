@@ -611,7 +611,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
             if self.conf.training.loss.kp_loss_name == "distill": 
-                print("Distillation")
                 keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
             else:
                 keypoint_scoremap_loss = self.loss_fn(
