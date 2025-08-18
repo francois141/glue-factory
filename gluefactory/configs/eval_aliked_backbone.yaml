@@ -13,7 +13,7 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
     line_detection:
         do: True
         conf:
-          faster_lsd: False
+          lsd_type: default
     checkpoint: null
   matcher:
     # select matcher needed for the benchmark - ex matchers.nearest_neighbor_matcher for point benchmarks

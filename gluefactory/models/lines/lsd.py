@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import time
 from joblib import Parallel, delayed
-from pytlsd import lsd, lsd_from_points
+from pytlsd import lsd, lsd_from_points, lsd_opt
 from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
 import torchvision.transforms as T
@@ -16,7 +16,7 @@ class LSD(BaseModel):
         "max_num_lines": None,
         "force_num_lines": False,
         "n_jobs": 4,
-        "faster_lsd": False,
+        "run_type": "default",
     }
     required_data_keys = ["image"]
 
@@ -29,7 +29,7 @@ class LSD(BaseModel):
     def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
 
         # GaussianBlur: kernel size must be odd and positive
-        blur = T.GaussianBlur(kernel_size=7, sigma=0.75)
+        blur = T.GaussianBlur(kernel_size=7, sigma=0.6)
 
         # Apply blur
         in_tensor = blur(in_tensor.unsqueeze(0))[0]
@@ -46,7 +46,18 @@ class LSD(BaseModel):
         out = torch.zeros_like(in_tensor).to(torch.float32)
         out[1:-1, 1:-1] = norm
 
-        return out
+        # Compute angle where norm > threshold
+        threshold = 5.2262518595055063
+        mask = norm > threshold
+
+        # atan2(-gx, gy) for pixels where norm > threshold
+        angle_vals = np.atan2(-gx[mask], gy[mask])
+
+        # Insert angles back in output angle tensor
+        out_angle = np.zeros_like(in_tensor)
+        out_angle[1:-1, 1:-1][mask] = angle_vals
+
+        return out, out_angle
 
     def extract_points(self, gradnorm: torch.Tensor):
         gradnorm = gradnorm.cpu().numpy()
@@ -58,18 +69,12 @@ class LSD(BaseModel):
         sorted_indices = np.argsort(-intensities)
         positions_sorted = positions[sorted_indices]
 
-        keypoints_importants = positions_sorted[:, [1, 0]].astype(int).flatten().reshape(-1, 2)
-
-        np.random.shuffle(keypoints_importants) 
-
-        return keypoints_importants#[:100000]
+        # Return keypoints sorted by intensity
+        return positions_sorted[:, [1, 0]].astype(int).flatten().reshape(-1, 2)
 
     def detect_lines(self, img):
         start = time.perf_counter()
         # Run LSD
-
-        with_gpu_gradnorm = False
-
         if 'search' in self.conf and self.conf.search:
             segs = params_lsd(
                 img,
@@ -80,14 +85,23 @@ class LSD(BaseModel):
                 ang_th=self.conf.angle_th,
                 with_gaussian=self.conf.with_gaussian
             )
-        elif self.conf.faster_lsd:
-            segs = fast_lsd(img)
-        elif with_gpu_gradnorm:
-            gradient = self.compute_gradient_2d_noborder(torch.tensor(img))
-            interests_points = self.extract_points(gradient)
-            segs = lsd_from_points(img, interests_points)
-        else:
+        elif self.conf.run_type == "default":
             segs = lsd(img)
+        elif self.conf.run_type == "fast":
+            segs = fast_lsd(img)
+        elif self.conf.run_type == "optimal":
+            segs = lsd_opt(img)
+        elif self.conf.run_type == "points":
+            gradient, angles = self.compute_gradient_2d_noborder(torch.tensor(img))
+            interests_points = self.extract_points(gradient)
+            segs = lsd_from_points(
+                img,
+                interests_points,
+                scale=1.0,
+                gradnorm=gradient,
+                gradangle=angles
+            )
+
         end = time.perf_counter()
         # Convert latency in milliseconds
         latency = (end - start) * 1_000
