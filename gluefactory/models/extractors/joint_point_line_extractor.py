@@ -158,6 +158,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # K=Kernel-Size, M=num sampling pos
         aliked_model_cfg = aliked_cfgs[conf.aliked_model_name]
         dim = aliked_model_cfg["dim"]
+        if self.conf.backbone == "vgg_unet":
+            dim = 64 
         K = aliked_model_cfg["K"]
         M = aliked_model_cfg["M"]
         self.lambda_valid_kp = conf.training.loss.kp_loss_parameters.lambda_weighted_bce
@@ -251,7 +253,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 self.timings["line-af"] = []
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
-        if conf.training.do and conf.training.aliked_pretrained:
+        if conf.training.do and conf.training.aliked_pretrained and not self.conf.backbone == "vgg_unet":
             logger.warning("Load pretrained weights for aliked parts...")
             self.load_pretrained_aliked_elements()
 
@@ -381,7 +383,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # pass through encoder
         if self.conf.timeit:
             start_encoder = sync_and_time()
+        if padded_img.shape[1] == 3 and self.conf.backbone == "vgg_unet":
+            # Convert to grayscale
+            scale = image.new_tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1)
+            padded_img = (image * scale).sum(1, keepdim=True)
         feature_map_padded = self.encoder_backbone(padded_img)
+
         if self.conf.timeit:
             self.timings["encoder"].append(sync_and_time() - start_encoder)
 
