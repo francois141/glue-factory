@@ -14,6 +14,7 @@ from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.models import get_model
 from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_cfgs
 from gluefactory.models.backbones.vit_encoder import VITBackbone
+from gluefactory.models.backbones.vgg_unet import VGGUNet
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
@@ -168,6 +169,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.encoder_backbone = AlikedEncoder(
                 aliked_model_cfg
             )
+        elif self.conf.backbone == "vgg_unet":
+            self.encoder_backbone = VGGUNet(tiny=False)
         else:
             print("Unknown backbone")
             raise NotImplementedError
@@ -609,6 +612,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Use BCE, WeightedBCE or Focal Loss for point position loss
         if self.conf.training.loss.use_one_view_kp_loss:
             if self.conf.training.loss.kp_loss_name == "distill": 
+                exit(0)
                 keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
             else:
                 keypoint_scoremap_loss = self.loss_fn(
