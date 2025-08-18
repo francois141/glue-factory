@@ -63,7 +63,7 @@ model:
 train:
     load_experiment: null #/cluster/scratch/fcosta/outputs/training/TRAIN_100k_DISTRIBUTED  # initialize the model from a previous experiment (take weights)
     seed: 7
-    epochs: 60
+    epochs: 180
     log_every_iter: 8
     eval_every_iter: 15000 # automatically creates new checkpoint if new best eval metric is reached -> set > #batches to not eval except at the end of each epoch
     save_every_iter: 50000
