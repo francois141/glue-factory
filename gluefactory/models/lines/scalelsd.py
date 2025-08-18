@@ -69,8 +69,8 @@ class ScaleLSD(BaseModel):
         for seg in segs:
             line_pred = seg['lines_pred'].reshape(-1, 2,2)
             scores = seg['lines_score'].reshape(-1)
-            line_pred = line_pred[scores >= self.conf.threshold]
-            scores = scores[scores >= self.conf.threshold]
+            line_pred = line_pred[scores >= self.conf.threshold].detach().cpu()
+            scores = scores[scores >= self.conf.threshold].detach().cpu()
 
             # Pad if necessary
             n = len(line_pred)
