@@ -57,11 +57,12 @@ class FastLSDLineExtractor(BaseModel):
         blur = T.GaussianBlur(kernel_size=self.conf.kernel_size, sigma=self.conf.sigma)
 
         # Apply blur
-        in_tensor = blur(in_tensor.unsqueeze(0))[0]
+        in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
 
         H, W = in_tensor.shape
-        com1 = in_tensor[1:-1, 1:-1] - in_tensor[:-2, :-2]
-        com2 = in_tensor[:-2, 1:-1] - in_tensor[1:-1, :-2]
+        in_tensor = in_tensor.int()
+        com1 = in_tensor[1:, 1:] - in_tensor[:-1,:-1]
+        com2 = in_tensor[:-1, 1:] - in_tensor[1:,:-1]
 
         gx = com1 + com2
         gy = com1 - com2
@@ -69,7 +70,7 @@ class FastLSDLineExtractor(BaseModel):
         norm = torch.sqrt(norm2 / 4.0)
 
         out = torch.zeros_like(in_tensor)
-        out[1:-1, 1:-1] = norm
+        out[1:, 1:] = norm
 
         # Compute angle where norm > threshold
         threshold = self.conf.threshold_value
@@ -79,8 +80,8 @@ class FastLSDLineExtractor(BaseModel):
         angle_vals = torch.atan2(-gx[mask], gy[mask])
 
         # Insert angles back in output angle tensor
-        out_angle = torch.zeros_like(in_tensor).to(torch.float)
-        out_angle[1:-1, 1:-1][mask] = angle_vals
+        out_angle = -1024 * torch.zeros_like(in_tensor).to(torch.float)
+        out_angle[1:, 1:][mask] = angle_vals
 
         return out, out_angle
 
