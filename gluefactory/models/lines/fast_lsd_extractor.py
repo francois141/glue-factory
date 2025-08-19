@@ -50,7 +50,11 @@ class FastLSDLineExtractor(BaseModel):
 
         # Currently we have 5 types of lsd entries
         assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
-        
+
+    def get_interesting_points_mask(self, data):
+        B, _, H, W = data["image"].shape
+        return torch.zeros((B, H, W), dtype=torch.float32, device=data["image"].device)
+                
     def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
 
         # GaussianBlur: kernel size must be odd and positive
