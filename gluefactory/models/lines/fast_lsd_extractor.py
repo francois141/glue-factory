@@ -136,7 +136,7 @@ class FastLSDLineExtractor(BaseModel):
                 img.detach().cpu().numpy().astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
-                gradangle=angle.detach().cpu().numpy(),
+                gradangle=angle,
                 grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
         elif self.conf.lsd_type == "best":
