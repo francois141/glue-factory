@@ -72,6 +72,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "nms_radius": 3,
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
+        "freeze_lines": False,
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
@@ -105,6 +106,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     "one_view_descriptor_weight": 1,
                     "two_view_descriptor_weight": 1,
                     "softargmax_weight": 1,  # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
+                    "interesting_points_weight": 0.1 # This branch is less important as it can be more approximative
                 },
             },
         },
@@ -232,6 +234,21 @@ class JointPointLineDetectorDescriptor(BaseModel):
         else:
             logger.warning("-- USE OF ANGLE FIELD IS DEACTIVATED! --")
 
+
+        self.interesting_points_loss_fn = nn.BCELoss(reduction="none")
+        self.interesting_points_branch = nn.Sequential(
+            nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(conf.line_df_decoder_channels),
+            nn.Conv2d(
+                conf.line_df_decoder_channels,
+                1,
+                kernel_size=3,
+                padding=1,
+            ),
+            nn.ReLU(),
+        )
+
         self.timings = None
         if conf.timeit:
             self.timings = {
@@ -314,12 +331,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             }
             self.load_state_dict(chkpt_statedict["model"], strict=False)
 
-        # Load line extractor and import line metrics if line detection is used
-        if self.conf.line_detection.do:
-            logger.info(f"Load line extractor: {self.conf.line_detection.name}")
-            self.line_extractor = get_model(self.conf.line_detection.name)(
-                self.conf.line_detection.conf
-            )
+        logger.info(f"Load line extractor: {self.conf.line_detection.name}")
+        self.line_extractor = get_model(self.conf.line_detection.name)(
+            self.conf.line_detection.conf
+        )
 
         # only load deeplsd model if we perform ablation or development
         if self.conf.line_detection.do and (
@@ -352,6 +367,19 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "max_num_keypoints": 1024,
             })
 
+        # Freeze df and backbone extractor
+        if self.conf.freeze_lines:
+            logger.warning("Freezing line extractor and distance field branch!")
+
+            for param in self.encoder_backbone.parameters():
+                param.requires_grad = False
+            for param in self.distance_field_branch.parameters():
+                param.requires_grad = False
+
+            if conf.use_line_anglefield:
+                for param in self.angle_field_branch.parameters():
+                    param.requires_grad = False
+
     def _forward(self, data: dict) -> torch.Tensor:
         """
         Perform a forward pass. Certain things are only executed NOT in training mode.
@@ -379,7 +407,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # pass through encoder
         if self.conf.timeit:
             start_encoder = sync_and_time()
-        feature_map_padded = self.encoder_backbone(padded_img)
+        self.encoder_backbone.eval()
+        with torch.no_grad():
+            feature_map_padded = self.encoder_backbone(padded_img)
         if self.conf.timeit:
             self.timings["encoder"].append(sync_and_time() - start_encoder)
 
@@ -418,9 +448,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ## Line DF Decoder ##
         if self.conf.timeit:
             start_line_df = sync_and_time()
-        line_distance_field = self.denormalize_df(
-            self.distance_field_branch(feature_map)
-        )  # denormalize as NN outputs normalized version
+            
+        self.distance_field_branch.eval()
+        with torch.no_grad():
+            line_distance_field = self.denormalize_df(
+                self.distance_field_branch(feature_map)
+            )  # denormalize as NN outputs normalized version
         # remove additional dimensions of size 1 if not having batchsize one
         line_distance_field = (
             line_distance_field.squeeze(1)
@@ -447,6 +480,16 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if self.conf.timeit:
                 self.timings["line-af"].append(sync_and_time() - start_line_af)
             output["line_anglefield"] = line_angle_field
+
+        ## Interesting points Decoder ##
+        points_mask = self.interesting_points_branch(feature_map)
+        points_mask = (
+            points_mask.squeeze(1)
+            if points_mask.shape[0] == 1
+            else points_mask.squeeze()
+        )
+        output["points_mask"] = points_mask
+
 
         # Keypoint detection
         if self.conf.timeit:
@@ -798,6 +841,18 @@ class JointPointLineDetectorDescriptor(BaseModel):
             losses["total"] += (
                 self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
             )
+
+        
+        # Now loss for the interesting points 
+        mask_loss = self.interesting_points_loss_fn(
+            torch.clamp(pred["points_mask"], 0.0,1.0),
+            self.line_extractor.get_interesting_points_mask(data)
+        ).mean(dim=(1, 2))
+
+        losses["points_mask_loss"] = mask_loss
+        losses["total"] += (
+            self.conf.training.loss.loss_weights.interesting_points_weight * mask_loss
+        )
 
         # add metrics if in validation mode
         if not self.training:

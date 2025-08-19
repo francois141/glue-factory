@@ -36,14 +36,14 @@ TARGET_DIR=/cluster/scratch/$USER/outputs/training/$2
 python -m gluefactory.eval.megadepth1500 \
   --conf $CONFIG_PATH \
   --checkpoint /cluster/scratch/$USER/outputs/training/$2/checkpoint_best.tar \
-  --overwrite > "${OUTPUT_DIR}/jpl_megadepth.txt"
+  --overwrite > "${OUTPUT_DIR}/${2}_jpl_megadepth.txt"
 
 python -m gluefactory.eval.scannet1500 \
   --conf $CONFIG_PATH \
   --checkpoint /cluster/scratch/$USER/outputs/training/$2/checkpoint_best.tar \
-  --overwrite > "${OUTPUT_DIR}/jpl_scannet1500.txt"
+  --overwrite > "${OUTPUT_DIR}/${2}_jpl_scannet1500.txt"
 
 python -m gluefactory.eval.hpatches \
   --conf $CONFIG_PATH \
   --checkpoint /cluster/scratch/$USER/outputs/training/$2/checkpoint_best.tar \
-  --overwrite > "${OUTPUT_DIR}/jpl_hpatches.txt"
+  --overwrite > "${OUTPUT_DIR}/${2}_jpl_hpatches.txt"
