@@ -1,8 +1,8 @@
 model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
   name: two_view_pipeline
   extractor:
-    backbone: "vit"
     name: extractors.joint_point_line_extractor
+    backbone: "vgg_unet"
     max_num_keypoints: 2048  # setting for training, for eval: -1
     detection_threshold: 0.0 # set to <= 0 for training, for eval without fixed num of kp, do set to a good value
     nms_radius: 3
