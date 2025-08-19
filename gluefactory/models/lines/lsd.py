@@ -32,11 +32,12 @@ class LSD(BaseModel):
         blur = T.GaussianBlur(kernel_size=7, sigma=0.6)
 
         # Apply blur
-        in_tensor = blur(in_tensor.unsqueeze(0))[0]
+        in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
 
         H, W = in_tensor.shape
-        com1 = in_tensor[1:-1, 1:-1] - in_tensor[:-2, :-2]
-        com2 = in_tensor[:-2, 1:-1] - in_tensor[1:-1, :-2]
+        in_tensor = in_tensor.int()
+        com1 = in_tensor[1:, 1:] - in_tensor[:-1, :-1]
+        com2 = in_tensor[:-1, 1:] - in_tensor[1:, :-1]
 
         gx = com1 + com2
         gy = com1 - com2
@@ -44,7 +45,7 @@ class LSD(BaseModel):
         norm = torch.sqrt(norm2 / 4.0)
 
         out = torch.zeros_like(in_tensor).to(torch.float32)
-        out[1:-1, 1:-1] = norm
+        out[1:, 1:] = norm
 
         # Compute angle where norm > threshold
         threshold = 5.2262518595055063
@@ -52,16 +53,16 @@ class LSD(BaseModel):
 
         # atan2(-gx, gy) for pixels where norm > threshold
         angle_vals = np.atan2(-gx[mask], gy[mask])
+        epsilon = 1e-9
+        angle_vals[np.isclose(angle_vals, np.pi, atol=epsilon)] = -np.pi
 
         # Insert angles back in output angle tensor
-        out_angle = np.zeros_like(in_tensor)
-        out_angle[1:-1, 1:-1][mask] = angle_vals
+        out_angle = -1024 * np.zeros_like(in_tensor)
+        out_angle[1:, 1:][mask] = angle_vals
 
-        return out, out_angle
+        return out.cpu().numpy(), out_angle
 
-    def extract_points(self, gradnorm: torch.Tensor):
-        gradnorm = gradnorm.cpu().numpy()
-
+    def extract_points(self, gradnorm):
         positions = np.argwhere(gradnorm > 0)  
 
         intensities = gradnorm[positions[:, 0], positions[:, 1]]
