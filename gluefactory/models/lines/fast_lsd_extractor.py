@@ -131,7 +131,7 @@ class FastLSDLineExtractor(BaseModel):
             # Compute grad angle old style
             img_grad_angle = compute_image_grad(img.detach().cpu().numpy())[3]
             angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
-            angle[gradnorm < self.conf.grad_thresh] = -1024
+            angle[gradnorm.detach().cpu().numpy() < self.conf.grad_thresh] = -1024
             lines = lsd(
                 img.detach().cpu().numpy().astype(np.float64),
                 scale=1.0,
