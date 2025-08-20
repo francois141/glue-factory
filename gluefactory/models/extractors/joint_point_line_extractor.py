@@ -407,9 +407,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # pass through encoder
         if self.conf.timeit:
             start_encoder = sync_and_time()
-        self.encoder_backbone.eval()
-        with torch.no_grad():
+
+        if self.conf.freeze_lines:
+            self.encoder_backbone.eval()
+            with torch.no_grad():
+                feature_map_padded = self.encoder_backbone(padded_img)
+        else:
             feature_map_padded = self.encoder_backbone(padded_img)
+
         if self.conf.timeit:
             self.timings["encoder"].append(sync_and_time() - start_encoder)
 
@@ -448,9 +453,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ## Line DF Decoder ##
         if self.conf.timeit:
             start_line_df = sync_and_time()
-            
-        self.distance_field_branch.eval()
-        with torch.no_grad():
+
+        if self.conf.freeze_lines:
+            self.distance_field_branch.eval()
+            with torch.no_grad():
+                line_distance_field = self.denormalize_df(
+                    self.distance_field_branch(feature_map)
+                )  # denormalize as NN outputs normalized version
+        else:
             line_distance_field = self.denormalize_df(
                 self.distance_field_branch(feature_map)
             )  # denormalize as NN outputs normalized version
