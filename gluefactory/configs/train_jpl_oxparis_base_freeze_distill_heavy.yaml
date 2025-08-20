@@ -3,7 +3,7 @@ data:
     data_dir: "oxparis_100k"  # as subdirectory of DATA_PATH(defined in settings.py)
     grayscale: False
     num_workers: 16  # number of workers used by the Dataloader: recommended 4 * n_gpus (also given for all gpus)
-    train_batch_size: 16  # given for all gpus
+    train_batch_size: 8  # given for all gpus
     val_batch_size: 8
     prefetch_factor: 2
     reshape: 800  # new resizing keeps aspect-ratio so quadratic image is not guaranteed
@@ -40,6 +40,7 @@ model:
     use_line_anglefield: False   # if set to false, model will be initialized without AF branch and AF will not be output or considered in inference or training
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
     freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them)
+    heavy_kp_head: True
     training:
         do: True
         two_view: False
