@@ -20,9 +20,7 @@ OUTPUT_DIR=$DIR/eval/point_evaluation
 
 # -------------- Function to Run Eval -----------------
 run_eval() {
-  echo "Bonjour"
   local conf_path="$1"
-  local checkpoint="$2"
 
   # Extract descriptor name
   local conf_file=$(basename "$conf_path" .yaml)
@@ -46,13 +44,15 @@ run_eval() {
 
 # Run evaluations
 # NN evaluation
-run_eval "./gluefactory/configs/eval/superpoint+NN.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/aliked+NN.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/disk+NN.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/sift+NN.yaml" "$CHECKPOINT"
+run_eval "./gluefactory/configs/eval/superpoint+NN.yaml"
+run_eval "./gluefactory/configs/eval/aliked+NN.yaml" 
+run_eval "./gluefactory/configs/eval/disk+NN.yaml" 
+run_eval "./gluefactory/configs/eval/sift+NN.yaml"
+run_eval "./gluefactory/configs/eval/dedode+NN.yaml" 
 # ROMA evaluation
-run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/aliked+ROMA.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/disk+ROMA.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/sift+ROMA.yaml" "$CHECKPOINT"
-run_eval "./gluefactory/configs/eval/dad+ROMA.yaml" "$CHECKPOINT"
+run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml"
+run_eval "./gluefactory/configs/eval/aliked+ROMA.yaml" 
+run_eval "./gluefactory/configs/eval/disk+ROMA.yaml" 
+run_eval "./gluefactory/configs/eval/sift+ROMA.yaml" 
+run_eval "./gluefactory/configs/eval/dedode+ROMA.yaml" 
+run_eval "./gluefactory/configs/eval/dad+ROMA.yaml" 

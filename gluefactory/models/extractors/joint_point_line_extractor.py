@@ -17,6 +17,7 @@ from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
+from gluefactory.models.extractors.dedode import DeDoDeDetector
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
 from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
 from gluefactory.models.utils.metrics_points import (
@@ -73,6 +74,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
         "freeze_lines": False,
+        "descriptor_branch": "aliked", # options are aliked or dedode
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
@@ -81,7 +83,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
             "sharpen_df": True,
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
-                "gt_aliked_model": "aliked-n32",
+                "gt_aliked_model": "aliked-n32", # dedode is also an option
                 "use_one_view_loss": True,  # In one view training can decide if train descriptors with this flag
                 "use_two_view_loss": True,  # can only be used if two_view training activated (sparseNRE loss)
             },
@@ -185,9 +187,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
             ),
         )
         # Keypoint descriptor module "SDDH" from ALIKED
-        self.descriptor_branch = SDDH(
-            dim, K, M, gate=nn.SELU(inplace=True), conv2D=False, mask=False
-        )
+        if self.conf.descriptor_branch == "aliked":
+            self.descriptor_branch = SDDH(
+                dim, K, M, gate=nn.SELU(inplace=True), conv2D=False, mask=False
+            )
+        else:
+            self.descriptor_branch = DeDoDeDetector({})
         ## Line Attraction Field information (Line Distance Field and Angle Field) ##
         # Line distance field decoder similar to that in DeepLSD
 
@@ -271,16 +276,20 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # Initialize Lightweight ALIKED model to perform on-the-fly ground-truth generation for descriptors if training in one-view setting
         if conf.training.do and conf.training.train_descriptors.use_one_view_loss:
-            logger.warning("Load ALiked Lightweight model for descriptor training...")
-            aliked_gt_cfg = {
-                "model_name": self.conf.training.train_descriptors.gt_aliked_model,
-                "max_num_keypoints": self.conf.max_num_keypoints,
-                "detection_threshold": self.conf.detection_threshold,
-                "force_num_keypoints": False,
-                "pretrained": True,
-                "nms_radius": self.conf.nms_radius,
-            }
-            self.aliked_lw = get_model("extractors.aliked_light")(aliked_gt_cfg).eval()
+            if "aliked" not in self.conf.training.train_descriptors.gt_aliked_model:
+                logger.warning("Load DeDoDe model for descriptor training...")
+                self.descriptor_gt = DeDoDeDetector({})
+            else:
+                logger.warning("Load ALiked Lightweight model for descriptor training...")
+                aliked_gt_cfg = {
+                    "model_name": self.conf.training.train_descriptors.gt_aliked_model,
+                    "max_num_keypoints": self.conf.max_num_keypoints,
+                    "detection_threshold": self.conf.detection_threshold,
+                    "force_num_keypoints": False,
+                    "pretrained": True,
+                    "nms_radius": self.conf.nms_radius,
+                }
+                self.aliked_lw = get_model("extractors.aliked_light")(aliked_gt_cfg).eval()
 
         # load model checkpoint if given -> only load weights
         if conf.checkpoint is not None:
@@ -532,12 +541,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.timeit:
             start_desc = sync_and_time()
 
-        keypoint_descriptors, _ = self.descriptor_branch(feature_map, keypoints)
+        if self.conf.descriptor_branch == "aliked":
+            keypoint_descriptors, _ = self.descriptor_branch(feature_map, keypoints)
+            output["descriptors"] = torch.stack(keypoint_descriptors)  # B N D
+        else: 
+            output["descriptors"] = self.descriptor_branch.describe_keypoints({"image": data["image"]}, keypoints[0].unsqueeze(0))
 
         if self.conf.timeit:
             self.timings["descriptor-branch"].append(sync_and_time() - start_desc)
-
-        output["descriptors"] = torch.stack(keypoint_descriptors)  # B N D
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
@@ -964,8 +975,15 @@ class JointPointLineDetectorDescriptor(BaseModel):
             pred.get("image", None) is not None
             and pred.get("keypoints", None) is not None
         )
-        with torch.no_grad():
-            descriptors = self.aliked_lw(pred)
+
+        if "aliked" in self.conf.training.train_descriptors.gt_aliked_model:
+            with torch.no_grad():
+                descriptors = self.aliked_lw(pred)
+        else:
+            with torch.no_grad():
+                descriptors = {}
+                descriptors["aliked_descriptors"] = self.descriptor_gt({"image": pred["image"]}, pred["keypoints"])
+        
         return descriptors
 
     def load_pretrained_aliked_elements(self) -> None:
