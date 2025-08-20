@@ -16,7 +16,8 @@ from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_
 from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
-from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
+from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder, SMHHeavy
+from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.models.extractors.dedode import DeDoDeDetector
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
 from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
@@ -75,6 +76,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "force_num_keypoints": False,
         "freeze_lines": False,
         "descriptor_branch": "aliked", # options are aliked or dedode
+        "heavy_kp_head": False,
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
@@ -150,6 +152,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "focal_loss",
             "bce",
             "distill",
+            "distill_dad",
         ]
         if self.conf.training.loss.kp_loss_name == "weighted_bce":
             self.loss_fn = self.weighted_bce_loss
@@ -175,7 +178,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         else:
             print("Unknown backbone")
             raise NotImplementedError
-        self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
+
+        if self.conf.heavy_kp_head:
+            self.keypoint_and_junction_branch = SMHHeavy(dim)  # using SMH from ALIKE here
+        else:
+            self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
+
         self.dkd = DKD(  # heuristic point-detection with subpixel refinement from ALIKE (remove border points, nms, refinement)
             radius=conf.nms_radius,
             top_k=-1 if conf.detection_threshold > 0 else conf.max_num_keypoints,
@@ -389,6 +397,19 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 for param in self.angle_field_branch.parameters():
                     param.requires_grad = False
 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.dad_model = DadDetector({
+            "max_num_keypoints": None,
+            "nms_radius": 4,
+            "detection_threshold": 0.005,
+            "remove_borders": 4,
+            "descriptor_dim": 256,
+            "channels": [64, 64, 128, 128, 256],
+            "dense_outputs": None,
+            "weights": None,  # local path of pretrained weights
+        }).to(device)
+        self.dad_model.eval().to(device)
+
     def _forward(self, data: dict) -> torch.Tensor:
         """
         Perform a forward pass. Certain things are only executed NOT in training mode.
@@ -544,7 +565,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.descriptor_branch == "aliked":
             keypoint_descriptors, _ = self.descriptor_branch(feature_map, keypoints)
             output["descriptors"] = torch.stack(keypoint_descriptors)  # B N D
-        else: 
+        else:
             output["descriptors"] = self.descriptor_branch.describe_keypoints({"image": data["image"]}, keypoints[0].unsqueeze(0))
 
         if self.conf.timeit:
@@ -674,6 +695,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.loss.use_one_view_kp_loss:
             if self.conf.training.loss.kp_loss_name == "distill": 
                 keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
+            elif self.conf.training.loss.kp_loss_name == "distill_dad":
+                ground_heatmap = self.dad_model(data)["heatmap"]
+                keypoint_scoremap_loss = self.loss_fn(
+                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    ground_heatmap * padding_mask_view0,
+                ).mean(dim=(1, 2))
             else:
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
@@ -983,7 +1010,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             with torch.no_grad():
                 descriptors = {}
                 descriptors["aliked_descriptors"] = self.descriptor_gt({"image": pred["image"]}, pred["keypoints"])
-        
+
         return descriptors
 
     def load_pretrained_aliked_elements(self) -> None:
