@@ -63,7 +63,6 @@ model:
     line_detection:
       do: False
     checkpoint: null  # if given load model weights from this checkpoint
-    timeit: False  # override timeit: False from BaseModel
 train:
     load_experiment: null  # initialize the model from a previous experiment (take weights)
     seed: 7

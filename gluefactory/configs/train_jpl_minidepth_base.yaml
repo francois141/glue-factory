@@ -62,7 +62,6 @@ model:
     line_detection:
       do: False
     checkpoint: null  # if given load model weights from this checkpoint
-    timeit: False  # override timeit: False from BaseModel
 train:
     load_experiment: null  # initialize the model from a previous experiment (take weights)
     seed: 7
@@ -81,5 +80,3 @@ train:
             patience: 5
     keep_last_checkpoints: 5
     submodules: []
-    timeit: False    # print jpldd model mean timings every epoch
-

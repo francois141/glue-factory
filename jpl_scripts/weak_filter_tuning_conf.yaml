@@ -38,7 +38,6 @@ jpl_model:
     training:
       do: False
     checkpoint: /local/home/Point-Line/outputs/training/oxparis_800_focal/checkpoint_best.tar
-    timeit: False
     line_detection:
       do: False
 

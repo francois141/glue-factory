@@ -36,7 +36,7 @@ def sync_and_time():
 
 
 def run_measurement(
-    dataloader, model, num_s, name, device, batch_size, jpl_inner_timings=False
+    dataloader, model, num_s, name, device, batch_size
 ):
     print(f"Batch_size: {batch_size}")
 
@@ -92,7 +92,6 @@ if __name__ == "__main__":
     dset_conf = conf["data"]
     model_conf = conf["model"]
     model_is_jpl = "joint_point_line_extractor" in model_conf["name"]
-    do_jpl_inner_timing = model_is_jpl and model_conf["timeit"]
 
     print("NUMBER OF SAMPLES: ", args.num_s)
     print("CONF TO TEST: ", args.conf)
@@ -100,8 +99,6 @@ if __name__ == "__main__":
     print("--Split: ", dset_conf.split)
     print("Model: ", model_conf.name)
 
-    if model_is_jpl:
-        print("JPLDD-Inner timing activated: ", do_jpl_inner_timing)
 
     # get data loader
     dataloader = get_dataset_and_loader(dset_conf)
@@ -134,5 +131,4 @@ if __name__ == "__main__":
         name=model_conf.name,
         device=device,
         batch_size=dataloader.batch_size,
-        jpl_inner_timings=do_jpl_inner_timing,
     )

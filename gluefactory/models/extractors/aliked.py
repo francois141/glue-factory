@@ -904,26 +904,3 @@ class SMH(nn.Module):
     def forward(self, x):
         # expects feature map not normalized
         return torch.sigmoid(self.score_head(x))
-
-class SMHHeavy(nn.Module):
-    def __init__(self, input_dim):
-        super(SMHHeavy, self).__init__()
-        self.gate = nn.SELU(inplace=True)
-        self.score_head = nn.Sequential(
-            self.gate,
-            resnet.conv3x3(input_dim, 32),
-            self.gate,
-            resnet.conv3x3(32, 16),
-            self.gate,
-            resnet.conv3x3(16, 8),
-            self.gate,
-            resnet.conv3x3(8, 4),
-            self.gate,
-            resnet.conv3x3(4, 4),
-            self.gate,
-            resnet.conv3x3(4, 1),
-        )
-
-    def forward(self, x):
-        # expects feature map not normalized
-        return torch.sigmoid(self.score_head(x))

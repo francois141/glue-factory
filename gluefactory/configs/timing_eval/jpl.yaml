@@ -8,7 +8,6 @@ model:
       do: False
     backbone: "aliked"
     checkpoint:  assets/jpl_best.tar
-    timeit: False  # setting it to True -> gives 4-5 fps less performance
     line_detection:
       do: True
       conf:

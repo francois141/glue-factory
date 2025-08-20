@@ -38,7 +38,6 @@ deeplsd_conf = {
 jpldd_conf = {
     "name": "joint_point_line_extractor",
     "max_num_keypoints": 1000,  # setting for training, for eval: -1
-    "timeit": True,  # override timeit: False from BaseModel
     "line_df_decoder_channels": 32,
     "line_af_decoder_channels": 32,
     "line_detection": {

@@ -9,7 +9,7 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
     line_df_decoder_channels: 64
     training:
       do: False
-    timeit: False  # override timeit: False from BaseModel
+
     line_detection:
         do: True
     checkpoint: /Users/rkre/PycharmProjects/glue-factory/checkpoints/oxparis_scannet_800_focal/checkpoint_best.tar

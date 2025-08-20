@@ -10,7 +10,6 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
     descriptor_branch: dedode
     training:
       do: False
-    timeit: False  # override timeit: False from BaseModel
     line_detection:
         do: False
         conf:

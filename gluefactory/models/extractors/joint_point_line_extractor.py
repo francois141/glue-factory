@@ -16,20 +16,14 @@ from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_
 from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.deeplsd_inference import DeepLSD
-from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder, SMHHeavy
+from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
 from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.models.extractors.dedode import DeDoDeDetector
 from gluefactory.models.extractors.superpoint_open import SuperPoint
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
-from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
-from gluefactory.models.utils.metrics_points import (
-    compute_loc_error,
-    compute_pr,
-    compute_repeatability,
-)
 from gluefactory.models.extractors.dad_distill import DadDistillDetector
 from gluefactory.settings import DATA_PATH
-from gluefactory.utils.misc import change_dict_key, sync_and_time
+from gluefactory.utils.misc import change_dict_key
 from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 
 # Parameters for calculating point metrics in validation loss
@@ -77,7 +71,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "force_num_keypoints": False,
         "freeze_lines": False,
         "descriptor_branch": "aliked", # options are aliked or dedode
-        "heavy_kp_head": False,
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
@@ -124,7 +117,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         },
         "checkpoint": jpl_default_checkpoint_url,  # if given and non-null, load model checkpoint if local path load locally if standard url download it.
         "line_neighborhood": 5,  # used to normalize / denormalize line distance field
-        "timeit": False,  # override timeit: False from BaseModel
         "trainable": True,
     }
 
@@ -194,10 +186,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             print("Unknown backbone")
             raise NotImplementedError
 
-        if self.conf.heavy_kp_head:
-            self.keypoint_and_junction_branch = SMHHeavy(dim)  # using SMH from ALIKE here
-        else:
-            self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
+        self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
 
         self.dkd = DKD(  # heuristic point-detection with subpixel refinement from ALIKE (remove border points, nms, refinement)
             radius=conf.nms_radius,
@@ -261,21 +250,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
         else:
             logger.warning("-- USE OF ANGLE FIELD IS DEACTIVATED! --")
-
-        self.timings = None
-        if conf.timeit:
-            self.timings = {
-                "total-makespan": [],
-                "encoder": [],
-                "keypoint-and-junction-heatmap": [],
-                "line-df": [],
-                "descriptor-branch": [],
-                "keypoint-detection": [],
-            }
-            if conf.line_detection.do:
-                self.timings["line-detection"] = []
-            if conf.use_line_anglefield:
-                self.timings["line-af"] = []
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
         if conf.training.do and conf.training.aliked_pretrained:
@@ -424,8 +398,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             - DeepLSD like Angle Field (between -Pi and Pi as radians)
             - Detected Lines (if line detection activated)
         """
-        if self.conf.timeit:
-            total_start = sync_and_time()
         # output container definition
         output = {}
 
@@ -438,9 +410,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         padded_img = padder.pad(image)
 
         # pass through encoder
-        if self.conf.timeit:
-            start_encoder = sync_and_time()
-
         if self.conf.freeze_lines:
             self.encoder_backbone.eval()
             with torch.no_grad():
@@ -448,17 +417,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
         else:
             feature_map_padded = self.encoder_backbone(padded_img)
 
-        if self.conf.timeit:
-            self.timings["encoder"].append(sync_and_time() - start_encoder)
-
         # pass through keypoint & junction decoder
-        if self.conf.timeit:
-            start_keypoints = sync_and_time()
         score_map_padded = self.keypoint_and_junction_branch(feature_map_padded)
-        if self.conf.timeit:
-            self.timings["keypoint-and-junction-heatmap"].append(
-                sync_and_time() - start_keypoints
-            )
 
         # normalize and remove padding and format dimensions
         feature_map_padded_normalized = torch.nn.functional.normalize(
@@ -484,9 +444,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )  # B x H x W
 
         ## Line DF Decoder ##
-        if self.conf.timeit:
-            start_line_df = sync_and_time()
-
         if self.conf.freeze_lines:
             self.distance_field_branch.eval()
             with torch.no_grad():
@@ -503,14 +460,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if line_distance_field.shape[0] == 1
             else line_distance_field.squeeze()
         )
-        if self.conf.timeit:
-            self.timings["line-df"].append(sync_and_time() - start_line_df)
         output["line_distancefield"] = line_distance_field
 
         ## Line AF Decoder ##
         if self.conf.use_line_anglefield:
-            if self.conf.timeit:
-                start_line_af = sync_and_time()
             line_angle_field = (
                 self.angle_field_branch(feature_map) * torch.pi
             )  # multipy with pi as output is in [0, 1] and we want angle
@@ -520,21 +473,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 if line_distance_field.shape[0] == 1
                 else line_angle_field.squeeze()
             )
-            if self.conf.timeit:
-                self.timings["line-af"].append(sync_and_time() - start_line_af)
             output["line_anglefield"] = line_angle_field
-
-        # Keypoint detection
-        if self.conf.timeit:
-            start_keypoints = sync_and_time()
 
         # Keypoint detection also removes kp at border. it can return topk keypoints or set of thresholded kp.
         keypoints, _, kptscores = self.dkd(
             keypoint_and_junction_score_map,
             sub_pixel=bool(self.conf.subpixel_refinement),
         )
-        if self.conf.timeit:
-            self.timings["keypoint-detection"].append(sync_and_time() - start_keypoints)
 
         # raw output of DKD needed to generate GT-Descriptors (ONLY done if one-view-loss used)
         if (
@@ -552,24 +497,15 @@ class JointPointLineDetectorDescriptor(BaseModel):
         output["keypoint_scores"] = torch.stack(kptscores)
 
         # Keypoint descriptors
-        if self.conf.timeit:
-            start_desc = sync_and_time()
-
         if self.conf.descriptor_branch == "aliked":
             keypoint_descriptors, _ = self.descriptor_branch(feature_map, keypoints)
             output["descriptors"] = torch.stack(keypoint_descriptors)  # B N D
         else:
             output["descriptors"] = self.descriptor_branch.describe_keypoints({"image": data["image"]}, keypoints[0].unsqueeze(0))
 
-        if self.conf.timeit:
-            self.timings["descriptor-branch"].append(sync_and_time() - start_desc)
-
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
         if self.conf.line_detection.do and not self.training:
-            if self.conf.timeit:
-                start_lines = sync_and_time()
-
             if output.get("line_anglefield", None) is None:
                 # create dummy so that zipping works
                 line_angle_field = torch.zeros_like(line_distance_field)
@@ -591,12 +527,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 )
             output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
 
-            # Use aliked points sampled from inbetween Line endpoints?
-            if self.conf.timeit:
-                self.timings["line-detection"].append(sync_and_time() - start_lines)
-
-        if self.conf.timeit:
-            self.timings["total-makespan"].append(sync_and_time() - total_start)
         return output
 
 

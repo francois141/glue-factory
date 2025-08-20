@@ -82,7 +82,6 @@ model_configs = {
         },
         "nms_radius": 4,
         "line_neighborhood": 5,  # used to normalize / denormalize line distance field
-        "timeit": False,  # override timeit: False from BaseModel
         # "line_df_decoder_channels": 64, # uncomment it for models having the old number of channels
         # "line_af_decoder_channels": 64,
     },
