@@ -165,9 +165,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_focal":
             self.loss_fn = self.focal_loss
         elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce":
-            self.loss_fn = self.weighted_bce_loss
-        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce_weighted":
             self.loss_fn = nn.BCELoss(reduction="none")
+        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce_weighted":
+            self.loss_fn = self.weighted_bce_loss
         else:
             self.loss_fn = nn.BCELoss(reduction="none")
         # c1-c4 -> output dimensions of encoder blocks, dim -> dimension of hidden feature map
@@ -420,7 +420,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         }).to(device)
         self.dad_model.eval().to(device)
 
-        self.superpoint_model = SuperPoint().to(device)
+        self.superpoint_model = SuperPoint({}).to(device)
         self.superpoint_model.eval().to(device)
 
     def _forward(self, data: dict) -> torch.Tensor:
