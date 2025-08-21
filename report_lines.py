@@ -1,10 +1,10 @@
 import os
 
-INPUT_DIRS = {
-    "Fast LSD Eval": "jpl_scripts/eval/fast_lsd_eval/",
-    "Line Evaluation": "jpl_scripts/eval/line_evaluation/",
-}
-OUTPUT_FILE = "fast_lsd_eval_results.md"
+INPUT_DIRS = [
+    "jpl_scripts/eval/fast_lsd_eval/",
+    "jpl_scripts/eval/line_evaluation/",
+]
+OUTPUT_FILE = "report_lines.md"
 
 
 def parse_file(path):
@@ -76,18 +76,22 @@ def write_table(f, title, all_results):
 
 
 def main():
+    merged_results = {}
+
+    # Merge all folders
+    for input_dir in INPUT_DIRS:
+        results = process_dir(input_dir)
+        merged_results.update(results)
+
+    # Separate by dataset
+    hpatches_results = {k: v for k, v in merged_results.items() if "hpatches" in k.lower()}
+    rdnim_results = {k: v for k, v in merged_results.items() if "rdnim" in k.lower()}
+
+    # Write tables
     with open(OUTPUT_FILE, "w") as f:
         f.write("# Evaluation Results\n\n")
-
-        for folder_name, input_dir in INPUT_DIRS.items():
-            results = process_dir(input_dir)
-
-            # Separate by dataset
-            hpatches_results = {k: v for k, v in results.items() if "hpatches" in k.lower()}
-            rdnim_results = {k: v for k, v in results.items() if "rdnim" in k.lower()}
-
-            write_table(f, f"{folder_name} - HPatches", hpatches_results)
-            write_table(f, f"{folder_name} - RDNIM", rdnim_results)
+        write_table(f, "HPatches", hpatches_results)
+        write_table(f, "RDNIM", rdnim_results)
 
     print(f"✅ Results written to {OUTPUT_FILE}")
 
