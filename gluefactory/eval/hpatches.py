@@ -2,6 +2,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 from pprint import pprint
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -186,6 +187,8 @@ if __name__ == "__main__":
         "configs/",
         default_conf,
     )
+
+    name = name + f"_{random.randint(0, 999999)}"
 
     experiment_dir = output_dir / name
     experiment_dir.mkdir(exist_ok=True)
