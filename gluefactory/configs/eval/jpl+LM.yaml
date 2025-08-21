@@ -7,11 +7,13 @@ model:
       do: False
     max_num_keypoints: 2048
     line_detection:
-      do: True
-    #checkpoint: /local/home/Point-Line/outputs/training/oxparis_800_focal/checkpoint_best.tar
+        do: True
+        conf:
+          lsd_type: old
+          sigma: 0.9
+    checkpoint: /cluster/home/fcosta/glue-factory/assets/jpl_best.tar
   matcher:
     name: matchers.line_matcher
-    line_dist: orth
 benchmarks:
   megadepth1500:
     data:
