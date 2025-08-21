@@ -159,16 +159,22 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "distill_dad_superpoint_bce_weighted",
         ]
         if self.conf.training.loss.kp_loss_name == "weighted_bce":
+            logger.warning("-- Using weighted BCE loss for the points! --")
             self.loss_fn = self.weighted_bce_loss
         elif self.conf.training.loss.kp_loss_name == "focal_loss":
+            logger.warning("-- Using focal loss for the points! --")
             self.loss_fn = self.focal_loss
         if self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_focal":
+            logger.warning("-- Using focal loss for the points! --")
             self.loss_fn = self.focal_loss
         elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce":
+            logger.warning("-- Using BCE loss for the points! --")
             self.loss_fn = nn.BCELoss(reduction="none")
         elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce_weighted":
+            logger.warning("-- Using weighted BCE loss for the points! --")
             self.loss_fn = self.weighted_bce_loss
         else:
+            logger.warning("-- Using BCE loss for the points! --")
             self.loss_fn = nn.BCELoss(reduction="none")
         # c1-c4 -> output dimensions of encoder blocks, dim -> dimension of hidden feature map
         # K=Kernel-Size, M=num sampling pos
@@ -717,7 +723,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             elif "distill_dad_superpoint" in self.conf.training.loss.kp_loss_name:
                 ground_heatmap1 = self.dad_model(data)["heatmap"]
                 ground_heatmap2 = self.superpoint_model(data)["heatmap"]
-                ground_heatmap = torch.max(ground_heatmap1, ground_heatmap2)
+                ground_heatmap = torch.max(ground_heatmap1.clone(), ground_heatmap2.clone())
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
