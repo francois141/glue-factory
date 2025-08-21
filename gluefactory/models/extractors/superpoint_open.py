@@ -192,29 +192,12 @@ class SuperPoint(BaseModel):
             scores = pad_and_stack(
                 scores, self.conf.max_num_keypoints, -1, mode="zeros"
             )
-        else:
-            keypoints = torch.stack(keypoints, 0)
+        else: 
             scores = torch.stack(scores, 0)
 
-        if len(keypoints) == 1 or self.conf.force_num_keypoints:
-            # Batch sampling of the descriptors
-            desc = sample_descriptors(keypoints, descriptors_dense, self.stride)
-        else:
-            desc = [
-                sample_descriptors(k[None], d[None], self.stride)[0]
-                for k, d in zip(keypoints, descriptors_dense)
-            ]
-
-        pred = {
-            "keypoints": keypoints + 0.5,
-            "keypoint_scores": scores,
-            "descriptors": desc.transpose(-1, -2),
+        return {
             "heatmap": scoremap_raw,
         }
-        if self.conf.dense_outputs:
-            pred["dense_descriptors"] = descriptors_dense
-
-        return pred
 
     def loss(self, pred, data):
         raise NotImplementedError
