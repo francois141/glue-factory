@@ -721,9 +721,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     ground_heatmap * padding_mask_view0,
                 ).mean(dim=(1, 2))
             elif "distill_dad_superpoint" in self.conf.training.loss.kp_loss_name:
-                ground_heatmap1 = self.dad_model(data)["heatmap"]
-                ground_heatmap2 = self.superpoint_model(data)["heatmap"]
-                ground_heatmap = torch.max(ground_heatmap1.clone(), ground_heatmap2.clone())
+                with torch.no_grad():  
+                    ground_heatmap1 = self.dad_model(data)["heatmap"]
+                    ground_heatmap2 = self.superpoint_model(data)["heatmap"]
+                    ground_heatmap = torch.max(ground_heatmap1, ground_heatmap2)
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
