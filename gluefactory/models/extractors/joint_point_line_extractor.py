@@ -19,6 +19,7 @@ from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder, SMHHeavy
 from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.models.extractors.dedode import DeDoDeDetector
+from gluefactory.models.extractors.superpoint_open import SuperPoint
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
 from gluefactory.models.utils.metrics_lines import get_rep_and_loc_error
 from gluefactory.models.utils.metrics_points import (
@@ -153,11 +154,20 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "bce",
             "distill",
             "distill_dad",
+            "distill_dad_superpoint_focal",
+            "distill_dad_superpoint_bce",
+            "distill_dad_superpoint_bce_weighted",
         ]
         if self.conf.training.loss.kp_loss_name == "weighted_bce":
             self.loss_fn = self.weighted_bce_loss
         elif self.conf.training.loss.kp_loss_name == "focal_loss":
             self.loss_fn = self.focal_loss
+        if self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_focal":
+            self.loss_fn = self.focal_loss
+        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce":
+            self.loss_fn = self.weighted_bce_loss
+        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce_weighted":
+            self.loss_fn = nn.BCELoss(reduction="none")
         else:
             self.loss_fn = nn.BCELoss(reduction="none")
         # c1-c4 -> output dimensions of encoder blocks, dim -> dimension of hidden feature map
@@ -409,6 +419,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "weights": None,  # local path of pretrained weights
         }).to(device)
         self.dad_model.eval().to(device)
+
+        self.superpoint_model = SuperPoint().to(device)
+        self.superpoint_model.eval().to(device)
 
     def _forward(self, data: dict) -> torch.Tensor:
         """
@@ -697,6 +710,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
             elif self.conf.training.loss.kp_loss_name == "distill_dad":
                 ground_heatmap = self.dad_model(data)["heatmap"]
+                keypoint_scoremap_loss = self.loss_fn(
+                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    ground_heatmap * padding_mask_view0,
+                ).mean(dim=(1, 2))
+            elif "distill_dad_superpoint" in self.conf.training.loss.kp_loss_name:
+                ground_heatmap1 = self.dad_model(data)["heatmap"]
+                ground_heatmap2 = self.superpoint_model(data)["heatmap"]
+                ground_heatmap = torch.max(ground_heatmap1, ground_heatmap2)
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
