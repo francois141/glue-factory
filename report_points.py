@@ -38,6 +38,8 @@ def process_dir(input_dir):
     for fname in os.listdir(input_dir):
         fpath = os.path.join(input_dir, fname)
         if os.path.isfile(fpath):
+            if "ROMA" in fpath:
+                continue
             metrics = parse_file(fpath)
             if metrics:
                 name = fname.replace(".yaml", "").replace(".txt", "")
