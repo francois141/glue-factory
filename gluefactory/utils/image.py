@@ -228,8 +228,8 @@ def normalize_coords(coords, hw: tuple[int, int] | None = None) -> torch.Tensor:
     coords[..., 1] = coords[..., 1] / (hw[0] - 1) * 2 - 1
     return coords
 
-def compute_image_grad(img, ksize=7):
-    blur_img = cv2.GaussianBlur(img, (ksize, ksize), 1).astype(np.float32)
+def compute_image_grad(img, ksize=7, sigma=1.0):
+    blur_img = cv2.GaussianBlur(img, (ksize, ksize), sigma).astype(np.float32)
     dx = np.zeros_like(blur_img)
     dy = np.zeros_like(blur_img)
     dx[:, 1:] = (blur_img[:, 1:] - blur_img[:, :-1]) / 2
