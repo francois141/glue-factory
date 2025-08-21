@@ -3,7 +3,7 @@ data:
     data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
     grayscale: False
     num_workers: 16  # number of workers used by the Dataloader: recommended 4 * n_gpus (also given for all gpus)
-    train_batch_size: 32  # given for all gpus
+    train_batch_size: 16  # given for all gpus
     val_batch_size: 8
     prefetch_factor: 2
     reshape: 800  # new resizing keeps aspect-ratio so quadratic image is not guaranteed
@@ -67,7 +67,7 @@ model:
 train:
     load_experiment: null  # initialize the model from a previous experiment (take weights)
     seed: 7
-    epochs: 60
+    epochs: 120
     log_every_iter: 8
     eval_every_iter: 15000 # automatically creates new checkpoint if new best eval metric is reached -> set > #batches to not eval except at the end of each epoch
     save_every_iter: 25000

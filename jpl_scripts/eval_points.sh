@@ -42,6 +42,12 @@ run_eval() {
 }
 # -----------------------------------------------------
 
+run_eval "./gluefactory/configs/eval/dedode+NN.yaml"
+run_eval "./gluefactory/configs/eval/dedode+ROMA.yaml" 
+
+exit 0
+
+
 # Run evaluations
 # NN evaluation
 run_eval "./gluefactory/configs/eval/superpoint+NN.yaml"
@@ -49,6 +55,7 @@ run_eval "./gluefactory/configs/eval/aliked+NN.yaml"
 run_eval "./gluefactory/configs/eval/disk+NN.yaml" 
 run_eval "./gluefactory/configs/eval/sift+NN.yaml"
 run_eval "./gluefactory/configs/eval/dedode+NN.yaml" 
+
 # ROMA evaluation
 run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml"
 run_eval "./gluefactory/configs/eval/aliked+ROMA.yaml" 

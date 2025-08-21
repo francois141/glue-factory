@@ -1,0 +1,44 @@
+# Evaluation Results
+
+## Fast LSD Eval - HPatches
+
+| File | 'loc_error@10lines' | 'loc_error@300lines' | 'loc_error@50lines' | 'mH_err@1' | 'mH_err@3' | 'mH_err@5' | 'repeatability@1px' | 'repeatability@3px' | 'repeatability@5px' |
+|------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| hpatches_raw_lsd | 0.180 | 1.415 | 0.497 | 0.583 | 0.883 | 0.909 | 0.264 | 0.536 | 0.616 |
+| hpatches_raw_lsd_fast | 0.183 | 1.476 | 0.496 | 0.570 | 0.889 | 0.906 | 0.263 | 0.533 | 0.616 |
+| hpatches_raw_lsd_optimal | 0.165 | 1.397 | 0.438 | 0.615 | 0.889 | 0.913 | 0.282 | 0.530 | 0.620 |
+| hpatches_raw_lsd_points | 0.204 | 1.467 | 0.536 | 0.596 | 0.878 | 0.907 | 0.243 | 0.512 | 0.606 |
+
+
+## Fast LSD Eval - RDNIM
+
+| File | 'loc_error@10lines' | 'loc_error@300lines' | 'loc_error@50lines' | 'mH_err@1' | 'mH_err@3' | 'mH_err@5' | 'repeatability@1px' | 'repeatability@3px' | 'repeatability@5px' |
+|------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| rdnim_lines_raw_lsd | 0.689 | 1.848 | 1.778 | 0.074 | 0.448 | 0.576 | 0.092 | 0.300 | 0.377 |
+| rdnim_lines_raw_lsd_fast | 0.668 | 1.844 | 1.784 | 0.078 | 0.438 | 0.570 | 0.093 | 0.299 | 0.375 |
+| rdnim_lines_raw_lsd_optimal | 0.593 | 1.732 | 1.622 | 0.099 | 0.457 | 0.583 | 0.107 | 0.321 | 0.389 |
+| rdnim_lines_raw_lsd_points | 0.697 | 1.800 | 1.737 | 0.084 | 0.433 | 0.547 | 0.100 | 0.316 | 0.387 |
+
+
+## Line Evaluation - HPatches
+
+| File | 'loc_error@10lines' | 'loc_error@300lines' | 'loc_error@50lines' | 'mH_err@1' | 'mH_err@3' | 'mH_err@5' | 'repeatability@1px' | 'repeatability@3px' | 'repeatability@5px' |
+|------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| hpatches_deeplsd | 0.199 | 1.430 | 0.554 | 0.581 | 0.874 | 0.906 | 0.272 | 0.541 | 0.618 |
+| hpatches_deeplsd_without_af | 0.199 | 1.343 | 0.540 | 0.570 | 0.881 | 0.902 | 0.279 | 0.556 | 0.637 |
+| hpatches_lsd | 0.180 | 1.415 | 0.497 | 0.583 | 0.883 | 0.909 | 0.264 | 0.536 | 0.616 |
+| hpatches_scalelsd | 0.211 | 1.558 | 0.569 | 0.533 | 0.876 | 0.911 | 0.202 | 0.465 | 0.552 |
+| hpatches_sold2 | 0.478 | 1.287 | 1.085 | 0.237 | 0.485 | 0.554 | 0.198 | 0.449 | 0.515 |
+
+
+## Line Evaluation - RDNIM
+
+| File | 'loc_error@10lines' | 'loc_error@300lines' | 'loc_error@50lines' | 'mH_err@1' | 'mH_err@3' | 'mH_err@5' | 'repeatability@1px' | 'repeatability@3px' | 'repeatability@5px' |
+|------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| rdnim_lines_deeplsd | 0.669 | 1.808 | 1.734 | 0.094 | 0.453 | 0.605 | 0.101 | 0.318 | 0.395 |
+| rdnim_lines_deeplsd_without_af | 0.602 | 1.708 | 1.636 | 0.105 | 0.451 | 0.604 | 0.124 | 0.354 | 0.427 |
+| rdnim_lines_lsd | 0.689 | 1.848 | 1.778 | 0.074 | 0.448 | 0.576 | 0.092 | 0.300 | 0.377 |
+| rdnim_lines_scalelsd | 0.520 | 1.828 | 1.710 | 0.098 | 0.474 | 0.634 | 0.091 | 0.250 | 0.314 |
+| rdnim_lines_sold2 | 1.045 | 1.411 | 1.389 | 0.006 | 0.094 | 0.160 | 0.088 | 0.200 | 0.240 |
+
+
