@@ -17,6 +17,11 @@ SetupStack
 mkdir -p $DIR/eval/line_evaluation
 OUTPUT_DIR=$DIR/eval/line_evaluation
 
+echo "Evaluation of JPL"
+
+python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_jpl.txt"
+python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_jpl.txt"
+
 echo "Evaluation of deeplsd"
 
 python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/deeplsd+AF+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_deeplsd.txt"
