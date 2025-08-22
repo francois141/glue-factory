@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from pytlsd import lsd, lsd_from_points, lsd_opt
 from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
-import torchvision.transforms as T
+from gluefactory.utils.image import compute_lsd_image_gradient, extract_non_zero_points_sorted_by_gradient
 
 from ..base_model import BaseModel
 
@@ -25,53 +25,6 @@ class LSD(BaseModel):
             assert (
                 self.conf.max_num_lines is not None
             ), "Missing max_num_lines parameter"
-
-    def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
-
-        # GaussianBlur: kernel size must be odd and positive
-        blur = T.GaussianBlur(kernel_size=7, sigma=0.6)
-
-        # Apply blur
-        in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
-
-        H, W = in_tensor.shape
-        in_tensor = in_tensor.int()
-        com1 = in_tensor[1:, 1:] - in_tensor[:-1, :-1]
-        com2 = in_tensor[:-1, 1:] - in_tensor[1:, :-1]
-
-        gx = com1 + com2
-        gy = com1 - com2
-        norm2 = gx * gx + gy * gy
-        norm = torch.sqrt(norm2 / 4.0)
-
-        out = torch.zeros_like(in_tensor).to(torch.float32)
-        out[1:, 1:] = norm
-
-        # Compute angle where norm > threshold
-        threshold = 5.2262518595055063
-        mask = norm > threshold
-
-        # atan2(-gx, gy) for pixels where norm > threshold
-        angle_vals = np.atan2(-gx[mask], gy[mask])
-        epsilon = 1e-9
-        angle_vals[np.isclose(angle_vals, np.pi, atol=epsilon)] = -np.pi
-
-        # Insert angles back in output angle tensor
-        out_angle = -1024 * np.zeros_like(in_tensor)
-        out_angle[1:, 1:][mask] = angle_vals
-
-        return out.cpu().numpy(), out_angle
-
-    def extract_points(self, gradnorm):
-        positions = np.argwhere(gradnorm > 0)  
-
-        intensities = gradnorm[positions[:, 0], positions[:, 1]]
-
-        sorted_indices = np.argsort(-intensities)
-        positions_sorted = positions[sorted_indices]
-
-        # Return keypoints sorted by intensity
-        return positions_sorted[:, [1, 0]].astype(int).flatten().reshape(-1, 2)
 
     def detect_lines(self, img):
         start = time.perf_counter()
@@ -93,14 +46,14 @@ class LSD(BaseModel):
         elif self.conf.run_type == "optimal":
             segs = lsd_opt(img)
         elif self.conf.run_type == "points":
-            gradient, angles = self.compute_gradient_2d_noborder(torch.tensor(img))
-            interests_points = self.extract_points(gradient)
+            gradient, angles = compute_lsd_image_gradient(torch.tensor(img))
+            interests_points = extract_non_zero_points_sorted_by_gradient(gradient)
             segs = lsd_from_points(
                 img,
-                interests_points,
+                interests_points.detach().cpu().numpy(),
                 scale=1.0,
-                gradnorm=gradient,
-                gradangle=angles
+                gradnorm=gradient.detach().cpu().numpy(),
+                gradangle=angles.detach().cpu().numpy()
             )
 
         end = time.perf_counter()

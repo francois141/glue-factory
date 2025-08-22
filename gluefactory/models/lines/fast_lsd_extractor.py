@@ -3,7 +3,8 @@ from typing import Optional
 import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
-from pytlsd import lsd, lsd_from_points, lsd_df, lsd_opt
+from pytlsd import lsd, lsd_from_points, lsd_df, lsd_opt, lsd_from_points_learn
+from gluefactory.utils.image import compute_lsd_image_gradient, extract_all_points_sorted_by_gradient
 
 from gluefactory.models.lines.line_refinement import filter_outlier_lines, merge_lines
 from gluefactory.models.lines.line_utils import preprocess_angle
@@ -51,63 +52,39 @@ class FastLSDLineExtractor(BaseModel):
         # Currently we have 5 types of lsd entries
         assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
 
+
+
     def get_interesting_points_mask(self, data):
-        B, _, H, W = data["image"].shape
-        return torch.zeros((B, H, W), dtype=torch.float32, device=data["image"].device)
-                
-    def compute_gradient_2d_noborder(self, in_tensor: torch.Tensor) -> torch.Tensor:
 
-        # GaussianBlur: kernel size must be odd and positive
-        blur = T.GaussianBlur(kernel_size=self.conf.kernel_size, sigma=self.conf.sigma)
+        B, C, H, W = data["image"].shape
 
-        # Apply blur
-        in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
+        if C == 3:
+            # Convert to grayscale
+            scale = data["image"].new_tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1)
+            img = (255 * data["image"] * scale).sum(1, keepdim=True)[:,0]
 
-        H, W = in_tensor.shape
-        in_tensor = in_tensor.int()
-        com1 = in_tensor[1:, 1:] - in_tensor[:-1,:-1]
-        com2 = in_tensor[:-1, 1:] - in_tensor[1:,:-1]
+        mask = torch.zeros((B, H, W), dtype=torch.float32, device=data["image"].device)
 
-        gx = com1 + com2
-        gy = com1 - com2
-        norm2 = gx * gx + gy * gy
-        norm = torch.sqrt(norm2 / 4.0)
+        for idx in range(B):
+            # Feed lsd_points
+            gradient, angle = compute_lsd_image_gradient(img)
+            interests_points = extract_all_points_sorted_by_gradient(gradient)
 
-        out = torch.zeros_like(in_tensor)
-        out[1:, 1:] = norm
+            # Get amount of important points
+            amount = lsd_from_points_learn(
+                img[idx].detach().cpu().numpy().astype(np.float64),
+                interests_points.detach().cpu().numpy().astype(np.float64),
+                scale=1.0,
+                gradnorm=gradient.detach().cpu().numpy(),
+                gradangle=angle.detach().cpu().numpy(),
+                grad_nfa=False
+            )
 
-        # Compute angle where norm > threshold
-        threshold = self.conf.threshold_value
-        mask = norm > threshold
+            filtered_points = interests_points[: min(H*W, amount + 2000)]
 
-        # atan2(-gx, gy) for pixels where norm > threshold
-        angle_vals = torch.atan2(-gx[mask], gy[mask])
+            mask[idx,filtered_points[:,0], filtered_points[:,1]] = 1.0
 
-        # Insert angles back in output angle tensor
-        out_angle = -1024 * torch.zeros_like(in_tensor).to(torch.float)
-        out_angle[1:, 1:][mask] = angle_vals
-
-        return out, out_angle
-
-
-    def extract_points(self, df: torch.Tensor):
-
-        # Find positions where df > 0
-        positions = (df > torch.quantile(df.to(torch.float), 0.75)).nonzero(as_tuple=False)  # shape [num_points, 2]
-
-        # Gather intensities at those positions
-        intensities = df[positions[:, 0], positions[:, 1]]
-
-        # Sort intensities in descending order
-        sorted_indices = torch.argsort(intensities, descending=True)
-        positions_sorted = positions[sorted_indices]
-
-        # Swap columns to get [x, y] instead of [row, col] and flatten
-        keypoints_importants = positions_sorted[:, [1, 0]].contiguous()
-
-        # Limit to first 100000 keypoints
-        return keypoints_importants[:100000]
-
+        return mask
 
     def detect_lines(
         self, img, df, line_level = None
@@ -162,15 +139,17 @@ class FastLSDLineExtractor(BaseModel):
                 gradangle=angle.detach().cpu().numpy(),
                 grad_nfa=self.conf.grad_nfa,
             )[:, :4].reshape(-1, 2, 2)
-        elif self.conf.lsd_type == "points":
-            gradient, angle = self.compute_gradient_2d_noborder(img)
-            interests_points = self.extract_points(gradient)
+        elif self.conf.lsd_type == "point":
+            interests_points = extract_all_points_sorted_by_gradient(gradnorm)
+            img_grad_angle = compute_image_grad(img.detach().cpu().numpy(), 7, self.conf.sigma)[3]
+            angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
+            angle[gradnorm.detach().cpu().numpy() < self.conf.grad_thresh] = -1024
             lines = lsd_from_points(
                 img.detach().cpu().numpy().astype(np.float64),
                 interests_points.detach().cpu().numpy().astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
-                gradangle=angle.detach().cpu().numpy(),
+                gradangle=angle,
                 grad_nfa=False
             )[:, :4].reshape(-1, 2, 2)
 

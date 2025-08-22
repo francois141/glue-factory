@@ -22,6 +22,11 @@ echo "Evaluation of JPL"
 python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_jpl.txt"
 python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_jpl.txt"
 
+echo "Evaluation of JPL with ferrari LSD"
+
+python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/jpl+points_lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_jpl_ferrari_lsd.txt"
+python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/jpl+points_lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_jpl_ferrari_lsd.txt"
+
 echo "Evaluation of deeplsd"
 
 python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/deeplsd+AF+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_deeplsd.txt"
