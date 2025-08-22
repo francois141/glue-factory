@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from omegaconf import OmegaConf
+import torchvision.transforms as T
 
 from ..geometry.wrappers import Camera
 
@@ -239,3 +240,97 @@ def compute_image_grad(img, ksize=7, sigma=1.0):
     gradnorm = np.sqrt(dx**2 + dy**2)
     gradangle = np.arctan2(dy, dx)
     return dx, dy, gradnorm, gradangle
+
+def compute_lsd_image_gradient(in_tensor: torch.Tensor) -> torch.Tensor:
+    device = in_tensor.device
+
+    # GaussianBlur: kernel size must be odd and positive
+    blur = T.GaussianBlur(kernel_size=7, sigma=0.6)
+
+    # Apply blur
+    in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
+
+    #in_tensor = in_tensor.int()
+    com1 = in_tensor[1:, 1:] - in_tensor[:-1, :-1]
+    com2 = in_tensor[:-1, 1:] - in_tensor[1:, :-1]
+
+    gx = com1 + com2
+    gy = com1 - com2
+    norm2 = gx * gx + gy * gy
+    norm = torch.sqrt(norm2 / 4.0)
+
+    out = torch.zeros_like(in_tensor).to(device).to(torch.float64)
+    out[1:, 1:] = norm
+
+    # Compute angle where norm > threshold
+    threshold = 5.2262518595055063
+    mask = norm > threshold
+
+    # atan2(-gx, gy) for pixels where norm > threshold
+    angle_vals = torch.atan2(-gx[mask], gy[mask])
+    epsilon = 1e-9
+    angle_vals[torch.isclose(angle_vals, torch.tensor(torch.pi).to(torch.float64), atol=epsilon)] = -torch.pi
+
+    # Insert angles back in output angle tensor
+    out_angle = -1024 * (torch.ones(in_tensor.shape).to(device).to(torch.float64))
+    out_angle[1:, 1:][mask] = angle_vals
+
+    return out, out_angle
+
+def extract_non_zero_points(gradnorm, amount=-1):
+    positions = np.argwhere(gradnorm > 0)
+
+    intensities = gradnorm[positions[:, 0], positions[:, 1]]
+
+    sorted_indices = np.argsort(-intensities)
+    positions_sorted = positions[sorted_indices]
+
+    # Return keypoints sorted by intensity
+    points = positions_sorted[:, [1, 0]].astype(int).flatten().reshape(-1, 2)
+
+    if amount != -1:
+        points = points[:amount]
+
+    return points
+
+def extract_non_zero_points_sorted_by_gradient(gradnorm: torch.Tensor, amount: int = -1) -> torch.Tensor:
+    # Find positions where gradnorm > 0
+    positions = torch.nonzero(gradnorm > 0, as_tuple=False)
+
+    if positions.numel() == 0:
+        return torch.empty((0, 2), dtype=torch.int64)
+
+    # Get intensities at those positions
+    intensities = gradnorm[positions[:, 0], positions[:, 1]]
+
+    # Sort positions by intensity (descending)
+    sorted_indices = torch.argsort(intensities, descending=True)
+    positions_sorted = positions[sorted_indices]
+
+    # Convert (row, col) -> (x, y) = (col, row)
+    points = positions_sorted[:, [1, 0]]
+
+    # Limit number of points if needed
+    if amount != -1:
+        points = points[:amount]
+
+    return points
+
+def extract_all_points_sorted_by_gradient(gradient: torch.Tensor):
+
+    # Generate all positions in [row, col] format
+    rows = torch.arange(gradient.size(0), device=gradient.device)
+    cols = torch.arange(gradient.size(1), device=gradient.device)
+
+    grid_y, grid_x = torch.meshgrid(rows, cols, indexing="ij")
+    positions = torch.stack([grid_y.reshape(-1), grid_x.reshape(-1)], dim=1)  # [num_points, 2]
+
+    # Gather intensities at those positions
+    intensities = gradient[positions[:, 0], positions[:, 1]]
+
+    # Sort intensities in descending order
+    sorted_indices = torch.argsort(intensities, descending=True)
+    positions_sorted = positions[sorted_indices]
+
+    # Return sorted positions
+    return positions_sorted[:, [1, 0]].contiguous()

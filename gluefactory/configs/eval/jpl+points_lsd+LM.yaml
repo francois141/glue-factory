@@ -9,7 +9,7 @@ model:
     line_detection:
         do: True
         conf:
-          lsd_type: old
+          lsd_type: point
           sigma: 0.9
     checkpoint: assets/jpl_best.tar
   matcher:
