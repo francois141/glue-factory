@@ -141,9 +141,79 @@ class SuperPoint(BaseModel):
 
         scoremap_raw = scores.clone()
 
+        scores = batched_nms(scores, self.conf.nms_radius)
+
+        # Discard keypoints near the image borders
+        if self.conf.remove_borders:
+            pad = self.conf.remove_borders
+            scores[:, :pad] = -1
+            scores[:, :, :pad] = -1
+            scores[:, -pad:] = -1
+            scores[:, :, -pad:] = -1
+
+        # Extract keypoints
+        if b > 1:
+            idxs = torch.where(scores > self.conf.detection_threshold)
+            mask = idxs[0] == torch.arange(b, device=scores.device)[:, None]
+        else:  # Faster shortcut
+            scores = scores.squeeze(0)
+            idxs = torch.where(scores > self.conf.detection_threshold)
+
+        # Convert (i, j) to (x, y)
+        keypoints_all = torch.stack(idxs[-2:], dim=-1).flip(1).float()
+        scores_all = scores[idxs]
+
+        keypoints = []
+        scores = []
+        for i in range(b):
+            if b > 1:
+                k = keypoints_all[mask[i]]
+                s = scores_all[mask[i]]
+            else:
+                k = keypoints_all
+                s = scores_all
+            if self.conf.max_num_keypoints is not None:
+                k, s = select_top_k_keypoints(k, s, self.conf.max_num_keypoints)
+
+            keypoints.append(k)
+            scores.append(s)
+
+        if self.conf.force_num_keypoints:
+            keypoints = pad_and_stack(
+                keypoints,
+                self.conf.max_num_keypoints,
+                -2,
+                mode="random_c",
+                bounds=(
+                    0,
+                    data.get("image_size", torch.tensor(image.shape[-2:])).min().item(),
+                ),
+            )
+            scores = pad_and_stack(
+                scores, self.conf.max_num_keypoints, -1, mode="zeros"
+            )
+        else:
+            keypoints = torch.stack(keypoints, 0)
+            scores = torch.stack(scores, 0)
+
+        if len(keypoints) == 1 or self.conf.force_num_keypoints:
+            # Batch sampling of the descriptors
+            desc = sample_descriptors(keypoints, descriptors_dense, self.stride)
+        else:
+            desc = [
+                sample_descriptors(k[None], d[None], self.stride)[0]
+                for k, d in zip(keypoints, descriptors_dense)
+            ]
+
         pred = {
+            "keypoints": keypoints + 0.5,
+            "keypoint_scores": scores,
+            "descriptors": desc.transpose(-1, -2),
             "heatmap": scoremap_raw,
         }
+        if self.conf.dense_outputs:
+            pred["dense_descriptors"] = descriptors_dense
+
         return pred
 
     def loss(self, pred, data):
