@@ -21,7 +21,7 @@ class DeepLSD(BaseModel):
         "line_neighborhood": 5,
         "multiscale": False,
         "scale_factors": [1.0, 1.5],
-        "detect_lines": False,
+        "detect_lines": True,
         "line_detection_params": {
             "use_img_grad_angle": False,
             "merge": False,
