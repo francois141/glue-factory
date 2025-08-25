@@ -592,6 +592,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
+
+        output["lines"] = []
+        output["valid_lines"] = []
+        output["line_descriptors"] = []
+        
         if self.conf.line_detection.do and not self.training:
             if self.conf.timeit:
                 start_lines = sync_and_time()
@@ -610,12 +615,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
             }
             pred_line_data = self.line_extractor(line_data)
 
-            output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
+            output["lines"].append(pred_line_data["lines"])
+
             if self.conf.line_detection.conf.return_line_descriptors:
-                output["line_descriptors"] = torch.stack(
-                    pred_line_data["line_descriptors"], dim=0
-                )
-            output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
+                output["line_descriptors"].append(pred_line_data["line_descriptors"])
+
+            output["valid_lines"].append(pred_line_data["valid_lines"])
 
             # Use aliked points sampled from inbetween Line endpoints?
             if self.conf.timeit:
@@ -1163,3 +1168,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
     def denormalize_df(self, df_norm: torch.Tensor) -> torch.Tensor:
         return torch.exp(-df_norm) * self.conf.line_neighborhood
+
+    def get_numer_of_parameters(self):
+        def count_parameters(model: nn.Module):
+            return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        return (count_parameters(self.distance_field_branch) +
+                count_parameters(self.interesting_points_branch) +
+                count_parameters(self.descriptor_branch) +
+                count_parameters(self.keypoint_and_junction_branch) +
+                count_parameters(self.encoder_backbone))
