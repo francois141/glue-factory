@@ -63,7 +63,7 @@ model:
                 one_view_descriptor_weight: 1
     line_detection:
       do: False
-    checkpoint: assets/jpl_best.tar  # if given load model weights from this checkpoint
+    checkpoint: assets/jpl_best_with_points.tar  # if given load model weights from this checkpoint
     timeit: False  # override timeit: False from BaseModel
 train:
     load_experiment: null  # initialize the model from a previous experiment (take weights)

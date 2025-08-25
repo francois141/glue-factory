@@ -164,7 +164,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         elif self.conf.training.loss.kp_loss_name == "focal_loss":
             logger.warning("-- Using focal loss for the points! --")
             self.loss_fn = self.focal_loss
-        if self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_focal":
+        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_focal":
             logger.warning("-- Using focal loss for the points! --")
             self.loss_fn = self.focal_loss
         elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce":
