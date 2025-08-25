@@ -316,21 +316,43 @@ def extract_non_zero_points_sorted_by_gradient(gradnorm: torch.Tensor, amount: i
 
     return points
 
-def extract_all_points_sorted_by_gradient(gradient: torch.Tensor):
 
-    # Generate all positions in [row, col] format
+def extract_all_points_sorted_by_gradient(gradient: torch.Tensor, percentile: float = 75.0):
+    """
+    Extract points sorted by gradient intensity, then keep only those
+    whose distance from the center is greater than the average distance
+    and whose intensity is above a given percentile.
+    
+    Args:
+        gradient (torch.Tensor): 2D gradient map [H, W].
+        percentile (float): intensity percentile (e.g. 90 => top 10%).
+
+    Returns:
+        torch.Tensor: positions [N, 2] in (col, row) format.
+    """
+    # --- Create position grid ---
     rows = torch.arange(gradient.size(0), device=gradient.device)
     cols = torch.arange(gradient.size(1), device=gradient.device)
-
     grid_y, grid_x = torch.meshgrid(rows, cols, indexing="ij")
     positions = torch.stack([grid_y.reshape(-1), grid_x.reshape(-1)], dim=1)  # [num_points, 2]
 
-    # Gather intensities at those positions
+    # --- Extract intensities ---
     intensities = gradient[positions[:, 0], positions[:, 1]]
 
-    # Sort intensities in descending order
+    # --- Distance to the center ---
+    center = torch.tensor([gradient.size(0)/2, gradient.size(1)/2], device=gradient.device)
+    distances = torch.norm(positions - center, dim=1)
+
+    # --- Filter by intensity percentile ---
+    threshold = torch.quantile(intensities, percentile / 100.0)
+    mask_percentile = intensities >= threshold
+
+    positions = positions[mask_percentile]
+    intensities = intensities[mask_percentile]
+
+    # --- Sort by descending intensity ---
     sorted_indices = torch.argsort(intensities, descending=True)
     positions_sorted = positions[sorted_indices]
 
-    # Return sorted positions
+    # Return as [x, y] = [col, row]
     return positions_sorted[:, [1, 0]].contiguous()

@@ -111,7 +111,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     "one_view_descriptor_weight": 1,
                     "two_view_descriptor_weight": 1,
                     "softargmax_weight": 1,  # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
-                    "interesting_points_weight": 0.1 # This branch is less important as it can be more approximative
                 },
             },
         },
@@ -262,21 +261,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
         else:
             logger.warning("-- USE OF ANGLE FIELD IS DEACTIVATED! --")
-
-
-        self.interesting_points_loss_fn = nn.BCELoss(reduction="none")
-        self.interesting_points_branch = nn.Sequential(
-            nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(conf.line_df_decoder_channels),
-            nn.Conv2d(
-                conf.line_df_decoder_channels,
-                1,
-                kernel_size=3,
-                padding=1,
-            ),
-            nn.ReLU(),
-        )
 
         self.timings = None
         if conf.timeit:
@@ -539,16 +523,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if self.conf.timeit:
                 self.timings["line-af"].append(sync_and_time() - start_line_af)
             output["line_anglefield"] = line_angle_field
-
-        ## Interesting points Decoder ##
-        points_mask = self.interesting_points_branch(feature_map)
-        points_mask = (
-            points_mask.squeeze(1)
-            if points_mask.shape[0] == 1
-            else points_mask.squeeze()
-        )
-        output["points_mask"] = points_mask
-
 
         # Keypoint detection
         if self.conf.timeit:
@@ -917,18 +891,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             losses["total"] += (
                 self.conf.training.loss.loss_weights.softargmax_weight * loc_loss
             )
-
-        
-        # Now loss for the interesting points 
-        mask_loss = self.interesting_points_loss_fn(
-            torch.clamp(pred["points_mask"], 0.0,1.0),
-            self.line_extractor.get_interesting_points_mask(data)
-        ).mean(dim=(1, 2))
-
-        losses["points_mask_loss"] = mask_loss
-        losses["total"] += (
-            self.conf.training.loss.loss_weights.interesting_points_weight * mask_loss
-        )
 
         # add metrics if in validation mode
         if not self.training:
