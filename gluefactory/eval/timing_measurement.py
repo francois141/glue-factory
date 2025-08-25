@@ -8,6 +8,8 @@ Attention: Make sure you configure batch_size and dataset split correctly.
 import argparse
 import time
 
+import torch
+import torch.nn as nn
 import numpy as np
 import torch
 from omegaconf import OmegaConf
@@ -36,47 +38,32 @@ def sync_and_time():
 def run_measurement(
     dataloader, model, num_s, name, device, batch_size, jpl_inner_timings=False
 ):
+    print(f"Batch_size: {batch_size}")
+
     count = 0
     timings = []
+    input_batched = 0
     for img in tqdm(
         dataloader,
-        total=num_s // batch_size,
+        total=1
     ):
-        img = batch_to_device(img, device, non_blocking=True)
-        with torch.no_grad():
-            start = sync_and_time()
-            pred = model(img)
-            torch.cuda.synchronize()
-            end = sync_and_time()
-            timings.append((end - start) / batch_size)
-        count += batch_size
-        if count >= num_s:
-            break
+        input_batched = batch_to_device(img, device, non_blocking=True)
+        break
 
-    print(f"*** RESULTS FOR {name} ON {num_s} IMAGES WITH BATCH SIZE {batch_size} ***")
-    mean = round(np.mean(timings), 6)
-    print(f"\tMean: {mean} --> ~{1/mean} FPS")
-    median = round(np.median(timings), 6)
-    print(f"\tMedian: {median} --> ~{1/median} FPS")
-    max_t = round(np.max(timings), 6)
-    min_t = round(np.min(timings), 6)
-    std_t = round(np.std(timings), 6)
-    print(f"\tMax: {max_t} --> ~{1/max_t} FPS")
-    print(f"\tMin: {min_t} --> ~{1/min_t} FPS")
-    print(f"\tStd: {std_t} --> ~{1/std_t} FPS")
-    perc90 = round(np.percentile(timings, 90), 6)
-    perc95 = round(np.percentile(timings, 95), 6)
-    perc99 = round(np.percentile(timings, 99), 6)
-    print(f"\t90th-percentile: {perc90} --> ~{1/perc90} FPS")
-    print(f"\t95th-percentile: {perc95} --> ~{1/perc95} FPS")
-    print(f"\t99th-percentile: {perc99} --> ~{1/perc99} FPS")
 
-    if jpl_inner_timings:
-        print(f"INNER TIMINGS JPLDD")
-        inner_timings = model.get_current_timings()
-        for k, v in inner_timings.items():
-            print(f"\t{k}: {round(v, 6)}")
+    start = sync_and_time()
 
+    with torch.no_grad():
+        for _ in tqdm(range(num_s)):
+            _ = model(input_batched)
+            if device == "cuda":
+                torch.cuda.synchronize()
+
+    end = sync_and_time()
+    print("Current throughput in detections/s: " + str(num_s * batch_size / (end - start)))
+
+def count_parameters(model: nn.Module):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -106,6 +93,9 @@ if __name__ == "__main__":
     # get data loader
     dataloader = get_dataset_and_loader(dset_conf)
 
+    if not torch.cuda.is_available():
+        args.device = "cpu"
+
     if args.device == "cuda":
         assert torch.cuda.is_available()
     elif args.device == "mps":
@@ -118,6 +108,11 @@ if __name__ == "__main__":
     model = get_model(model_conf.name)(model_conf)
     model.eval()
     model.to(device)
+
+    if model_is_jpl:
+        print(f"Model contains : {model.get_numer_of_parameters():.3e} parameters overall")
+    else:
+        print(f"Model contains : {count_parameters(model):.3e} parameters overall")
 
     run_measurement(
         dataloader=dataloader,

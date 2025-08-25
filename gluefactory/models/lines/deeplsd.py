@@ -13,7 +13,7 @@ class DeepLSD(BaseModel):
         "max_num_lines": None,
         "force_num_lines": False,
         "model_conf": {
-            "detect_lines": False,
+            "detect_lines": True,
             "line_detection_params": {
                 "use_img_grad_angle": False,
                 "merge": False,
