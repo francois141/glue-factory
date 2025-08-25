@@ -15,6 +15,7 @@ import torch
 from kornia.geometry.transform import warp_perspective
 from kornia.morphology import erosion
 from torch import nn
+import subprocess
 
 from gluefactory.datasets.homographies import sample_homography_corners
 from gluefactory.models.base_model import BaseModel
@@ -171,7 +172,17 @@ class SuperPoint(BaseModel):
             )
 
         path = Path(DATA_PATH, "weights/superpoint_v1.pth")
-        self.load_state_dict(torch.load(str(path)), strict=False)
+
+        if not path.parent.is_dir():
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not path.is_file():
+            link = "https://github.com/magicleap/SuperPointPretrainedNetwork/raw/refs/heads/master/superpoint_v1.pth"
+            cmd = ["wget", link, "-O", str(path)]
+            print("Downloading SuperPoint model...")
+            subprocess.run(cmd, check=True)
+
+        self.load_state_dict(torch.load(str(path), weights_only=False), strict=False)
 
         self.erosion_kernel = torch.tensor(
             [
