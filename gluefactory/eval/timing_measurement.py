@@ -62,6 +62,19 @@ def run_measurement(
     end = sync_and_time()
     print("Current throughput in detections/s: " + str(num_s * batch_size / (end - start)))
 
+    img_single =  {"image": input_batched['image'][:1]}
+
+    start = sync_and_time()
+
+    with torch.no_grad():
+        for _ in tqdm(range(num_s)):
+            _ = model(img_single)
+            if device == "cuda":
+                torch.cuda.synchronize()
+
+    end = sync_and_time()
+    print("Current latency in milliseconds: " + str((end - start) / num_s * 1e3))
+
 def count_parameters(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 

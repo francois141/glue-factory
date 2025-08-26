@@ -12,6 +12,8 @@ from gluefactory.utils.image import compute_image_grad
 import torchvision.transforms as T
 
 from ..base_model import BaseModel
+    
+from concurrent.futures import ThreadPoolExecutor
 
 
 class FastLSDLineExtractor(BaseModel):
@@ -52,39 +54,6 @@ class FastLSDLineExtractor(BaseModel):
         # Currently we have 5 types of lsd entries
         assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
 
-
-
-    def get_interesting_points_mask(self, data):
-
-        B, C, H, W = data["image"].shape
-
-        if C == 3:
-            # Convert to grayscale
-            scale = data["image"].new_tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1)
-            img = (255 * data["image"] * scale).sum(1, keepdim=True)[:,0]
-
-        mask = torch.zeros((B, H, W), dtype=torch.float32, device=data["image"].device)
-
-        for idx in range(B):
-            # Feed lsd_points
-            gradient, angle = compute_lsd_image_gradient(img[idx])
-            interests_points = extract_all_points_sorted_by_gradient(gradient)
-
-            # Get amount of important points
-            amount = lsd_from_points_learn(
-                img[idx].detach().cpu().numpy().astype(np.float64),
-                interests_points.detach().cpu().numpy().astype(np.float64),
-                scale=1.0,
-                gradnorm=gradient.detach().cpu().numpy(),
-                gradangle=angle.detach().cpu().numpy(),
-                grad_nfa=False
-            )
-
-            filtered_points = interests_points[: min(H*W, amount + 2000)]
-
-            mask[idx,filtered_points[:,0], filtered_points[:,1]] = 1.0
-
-        return mask
 
     def detect_lines(
         self, img, df, line_level = None
@@ -193,7 +162,7 @@ class FastLSDLineExtractor(BaseModel):
         Perform forward pass on the data. Supports batched data.
         Args:
             data: dictionary containing the data. Must contain the following keys: image, line_angle_field, line_distance_field.
-        Returns: a list of tensors, containing the lines for each image: shape: [N_images x (n_lines, 2, 2)]
+        Returns: dict containing the lines and valid_lines for each image.
         """
         # Convert to the right data format
         image = data["image"]
@@ -202,18 +171,26 @@ class FastLSDLineExtractor(BaseModel):
 
         # preprocess input to lsd
         image = (image[:, 0] * 255).to(torch.uint8)
-        lines = []
 
-        # valid lines contain a line mask indicating which lines were actually predicted and which are padding
-        # applied to enable batching via conf.force_num_lines
-        valid_lines = []
-        for img, df, ll in zip(image, line_df_denormalized, line_level):
-            line_pred = self.detect_lines(img, df, line_level)
-            lines.append(line_pred["lines"])
-            valid_lines.append(line_pred["valid_lines"])
-        # Here a list of lines for each img is returned.
-        outputs = {"lines": lines, "valid_lines": valid_lines}
-        return outputs
+        def process_one(img, df, ll):
+            line_pred = self.detect_lines(img, df, ll)
+            return line_pred["lines"], line_pred["valid_lines"]
+
+        results = []
+        # Use ThreadPoolExecutor to parallelize across batch dimension
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(process_one, img, df, ll)
+                for img, df, ll in zip(image, line_df_denormalized, line_level)
+            ]
+            for f in futures:
+                results.append(f.result())
+
+        # Unpack results
+        lines, valid_lines = zip(*results)
+
+        return {"lines": list(lines), "valid_lines": list(valid_lines)}
+
 
     def loss(self, pred, data):
         raise NotImplementedError
