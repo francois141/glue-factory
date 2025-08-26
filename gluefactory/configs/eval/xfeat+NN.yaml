@@ -23,9 +23,6 @@ benchmarks:
         eval:
             estimator: poselib
             ransac_th: -1
-        model:
-            extractor:
-                max_num_keypoints: 2048
     hpatches:
         data:
             preprocessing:
@@ -37,3 +34,4 @@ benchmarks:
         model:
             extractor:
                 max_num_keypoints: 1024  # overwrite config above
+

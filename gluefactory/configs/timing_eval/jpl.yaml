@@ -8,11 +8,11 @@ model:
       do: False
     backbone: "aliked"
     checkpoint:  assets/jpl_best.tar
-    timeit: True  # setting it to True -> gives 4-5 fps less performance
+    timeit: False  # setting it to True -> gives 4-5 fps less performance
     line_detection:
       do: True
       conf:
-        lsd_type: old
+        lsd_type: point
 data:
     name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
     data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)

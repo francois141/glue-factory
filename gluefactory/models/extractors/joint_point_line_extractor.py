@@ -1125,3 +1125,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
     def denormalize_df(self, df_norm: torch.Tensor) -> torch.Tensor:
         return torch.exp(-df_norm) * self.conf.line_neighborhood
+
+
+    def get_numer_of_parameters(self):
+        def count_parameters(model: nn.Module):
+            return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        return (count_parameters(self.distance_field_branch) +
+                count_parameters(self.descriptor_branch) +
+                count_parameters(self.keypoint_and_junction_branch) +
+                count_parameters(self.encoder_backbone))
