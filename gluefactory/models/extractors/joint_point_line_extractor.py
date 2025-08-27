@@ -605,27 +605,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 * losses["two_view_kp_descriptors"]
             )
 
-        # use angular loss for anglefield, only if use of af is activated
-        if (
-            self.conf.use_line_anglefield
-            and self.conf.training.loss.use_one_view_af_loss
-        ):
-            af_diff = (
-                gt_dict_view0["deeplsd_angle_field"]
-                - prediction_dict["line_anglefield"]
-            )
-            line_af_loss = (
-                torch.minimum(af_diff**2, (torch.pi - af_diff.abs()) ** 2)
-                * padding_mask_view0
-            ).mean(
-                dim=(1, 2)
-            )  # pixelwise minimum
-            losses["one_view_line_af"] = line_af_loss
-            losses["total"] += (
-                self.conf.training.loss.loss_weights.one_view_line_af_weight
-                * line_af_loss
-            )
-
         # Two view df consistency loss
         if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
             # img1 to img0
