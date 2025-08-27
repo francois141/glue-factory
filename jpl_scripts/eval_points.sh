@@ -43,9 +43,6 @@ run_eval() {
 # -----------------------------------------------------
 
 
-
-
-
 # Run evaluations
 # NN evaluation
 run_eval "./gluefactory/configs/eval/jpl+NN_points_evaluation.yaml"
@@ -54,6 +51,7 @@ run_eval "./gluefactory/configs/eval/aliked+NN.yaml"
 run_eval "./gluefactory/configs/eval/disk+NN.yaml" 
 run_eval "./gluefactory/configs/eval/sift+NN.yaml"
 run_eval "./gluefactory/configs/eval/dedode+NN.yaml"
+run_eval "./gluefactory/configs/eval/dad+NN.yaml"
 run_eval "./gluefactory/configs/eval/xfeat+NN.yaml"
 # ROMA evaluation
 run_eval "./gluefactory/configs/eval/jpl+ROMA_points_evaluation.yaml"
