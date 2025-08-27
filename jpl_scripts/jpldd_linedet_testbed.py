@@ -277,16 +277,7 @@ print(
 ## Inference - Random 300 samples [Get FPS]
 # Comment while inspecting binary_distance_field
 rand_idx = random.sample(range(0, len(ds)), 300)
-"""
-for i in rand_idx:
-    img_torch = ds[i]["image"].to(device).unsqueeze(0)
-    with torch.no_grad():
-        output_model = jpldd_model({"image": img_torch})
 
-timings=jpldd_model.get_current_timings(reset=True)
-pprint(timings)
-print(f"~FPS: {1 / (timings['total-makespan'])} using device {device}")
-"""
 # Save images
 IDX = 0
 for i in tqdm(rand_idx):

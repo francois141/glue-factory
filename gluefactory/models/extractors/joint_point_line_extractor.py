@@ -26,23 +26,8 @@ from gluefactory.settings import DATA_PATH
 from gluefactory.utils.misc import change_dict_key
 from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 
-# Parameters for calculating point metrics in validation loss
-default_H_params = {
-    "translation": True,
-    "rotation": True,
-    "scaling": True,
-    "perspective": True,
-    "scaling_amplitude": 0.2,
-    "perspective_amplitude_x": 0.2,
-    "perspective_amplitude_y": 0.2,
-    "patch_ratio": 0.85,
-    "max_angle": 1.57,
-    "allow_artifacts": True,
-}
-
 aliked_checkpoint_url = "https://github.com/Shiaoming/ALIKED/raw/main/models/{}.pth"  # used for training based on ALIKED weights
 logger = logging.getLogger(__file__)
-
 
 class JointPointLineDetectorDescriptor(BaseModel):
     """
@@ -59,9 +44,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
     default_conf = {
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
-        "df_branch": "base", # options are base and empty
         "aliked_model_name": "aliked-n16",  # ALIKED model determining architecture of our backbone
-        "use_line_anglefield": False,  # if false, model will be initialized without AF branch and AF isn't considered in inference or training
         "line_df_decoder_channels": 32,
         "line_af_decoder_channels": 32,
         "max_num_keypoints": 1024,  # setting for training, for eval: -1
@@ -111,25 +94,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "do": True,
             "name": "lines.fast_lsd_extractor",
             "conf": FastLSDLineExtractor.default_conf,
-            # following options only used for ablations
-            "use_deeplsd_kp": False,  # whether we should use DeepLSD line endpoints as junction candidates. Otherwise use JPLDD keypoints
-            "use_deeplsd_df_af": False,  # whether we should use Distance and Angle Field from JPLDD or DeepLSD
         },
         "checkpoint": jpl_default_checkpoint_url,  # if given and non-null, load model checkpoint if local path load locally if standard url download it.
         "line_neighborhood": 5,  # used to normalize / denormalize line distance field
         "trainable": True,
-    }
-
-    # used for line detection ablation and development when we use deeplsd af/df or line endpoints instead of original net output
-    deeplsd_conf = {
-        "detect_lines": True,
-        "line_detection_params": {
-            "merge": False,
-            "filtering": True,
-            "grad_thresh": 3,
-            "grad_nfa": True,
-        },
-        "weights": "DeepLSD/weights/deeplsd_md.tar",  # path to the weights of the DeepLSD model (relative to DATA_PATH)
     }
 
     n_limit_max = 20000  # taken from ALIKED which gives max num keypoints to detect!
@@ -205,51 +173,25 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
         else:
             self.descriptor_branch = DeDoDeDetector({})
-        ## Line Attraction Field information (Line Distance Field and Angle Field) ##
+            
+        
         # Line distance field decoder similar to that in DeepLSD
+        self.distance_field_branch = nn.Sequential(
+            nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(conf.line_df_decoder_channels),
+            nn.Conv2d(
+                conf.line_df_decoder_channels,
+                conf.line_df_decoder_channels,
+                kernel_size=3,
+                padding=1,
+            ),
+            nn.ReLU(),
+            nn.BatchNorm2d(conf.line_df_decoder_channels),
+            nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
+            nn.ReLU(),
+        )
 
-        if self.conf.df_branch == "base":
-            self.distance_field_branch = nn.Sequential(
-                nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
-                nn.ReLU(),
-                nn.BatchNorm2d(conf.line_df_decoder_channels),
-                nn.Conv2d(
-                    conf.line_df_decoder_channels,
-                    conf.line_df_decoder_channels,
-                    kernel_size=3,
-                    padding=1,
-                ),
-                nn.ReLU(),
-                nn.BatchNorm2d(conf.line_df_decoder_channels),
-                nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
-                nn.ReLU(),
-            )
-        else:
-            logger.warning("-- Use (almost) empty distance field branch! --")
-            self.distance_field_branch = nn.Sequential(
-                nn.Conv2d(dim, 1, kernel_size=3, padding=1),
-                nn.ReLU(),
-            )
-        # only use line angle-field if configured
-        if conf.use_line_anglefield:
-            # Angle branch similar to angle field decoder in DeepLSD
-            self.angle_field_branch = nn.Sequential(
-                nn.Conv2d(dim, conf.line_af_decoder_channels, kernel_size=3, padding=1),
-                nn.ReLU(),
-                nn.BatchNorm2d(conf.line_af_decoder_channels),
-                nn.Conv2d(
-                    conf.line_af_decoder_channels,
-                    conf.line_af_decoder_channels,
-                    kernel_size=3,
-                    padding=1,
-                ),
-                nn.ReLU(),
-                nn.BatchNorm2d(conf.line_af_decoder_channels),
-                nn.Conv2d(conf.line_af_decoder_channels, 1, kernel_size=1),
-                nn.Sigmoid(),
-            )
-        else:
-            logger.warning("-- USE OF ANGLE FIELD IS DEACTIVATED! --")
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
         if conf.training.do and conf.training.aliked_pretrained:
@@ -300,13 +242,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             chkpt_statedict["model"] = {
                 k: v for k, v in chkpt_statedict["model"].items() if not ("mlp" in k)
             }
-            # if angle field is not wanted we filter out its weights if existent so we can also load old checkpoints including this branch
-            if not self.conf.use_line_anglefield:
-                chkpt_statedict["model"] = {
-                    k: v
-                    for k, v in chkpt_statedict["model"].items()
-                    if not ("angle_field_branch" in k)
-                }
 
             self.load_state_dict(
                 chkpt_statedict["model"], strict=False
@@ -327,31 +262,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.conf.line_detection.conf
         )
 
-        # only load deeplsd model if we perform ablation or development
-        if self.conf.line_detection.do and (
-            self.conf.line_detection.use_deeplsd_kp
-            or self.conf.line_detection.use_deeplsd_df_af
-        ):
-            deeplsd_conf = {
-                "detect_lines": True,
-                "line_detection_params": {
-                    "merge": True,
-                    "filtering": True,
-                    "grad_thresh": 3,
-                    "grad_nfa": True,
-                },
-                "weights": "DeepLSD/weights/deeplsd_md.tar",  # path to the weights of the DeepLSD model (relative to DATA_PATH)
-            }
-            deeplsd_conf = OmegaConf.create(deeplsd_conf)
-            ckpt_path = DATA_PATH / deeplsd_conf.weights
-            ckpt = torch.load(
-                str(ckpt_path), map_location=torch.device("cpu"), weights_only=False
-            )
-            deeplsd_net = DeepLSD(deeplsd_conf)
-            deeplsd_net.load_state_dict(ckpt["model"])
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            self.deeplsd = deeplsd_net.to(device).eval()
-
         if self.conf.training.loss.kp_loss_name == "distill":
             # Use dad distillation
             self.dad_distil = DadDistillDetector({
@@ -366,10 +276,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 param.requires_grad = False
             for param in self.distance_field_branch.parameters():
                 param.requires_grad = False
-
-            if conf.use_line_anglefield:
-                for param in self.angle_field_branch.parameters():
-                    param.requires_grad = False
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dad_model = DadDetector({
@@ -461,19 +367,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             else line_distance_field.squeeze()
         )
         output["line_distancefield"] = line_distance_field
-
-        ## Line AF Decoder ##
-        if self.conf.use_line_anglefield:
-            line_angle_field = (
-                self.angle_field_branch(feature_map) * torch.pi
-            )  # multipy with pi as output is in [0, 1] and we want angle
-            # remove additional dimensions of size 1 if not having batchsize one
-            line_angle_field = (
-                line_angle_field.squeeze(1)
-                if line_distance_field.shape[0] == 1
-                else line_angle_field.squeeze()
-            )
-            output["line_anglefield"] = line_angle_field
 
         # Keypoint detection also removes kp at border. it can return topk keypoints or set of thresholded kp.
         keypoints, _, kptscores = self.dkd(
@@ -973,24 +866,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     del sd[k]
         return sd
 
-    def get_current_timings(self, reset: bool = False) -> dict:
-        """
-        It returns the median of the current forward-pass timings in a dictionary for
-        all the single network parts. Raises ValueError if timings are not activated.
-
-        reset: if True deletes all collected times until now
-        """
-        if self.timings is None:
-            raise ValueError(
-                "Inner Timings not activated/initialized. Hence, cannot get current timings"
-            )
-        results = {}
-        for k, v in self.timings.items():
-            results[k] = np.median(v)
-            if reset:
-                self.timings[k] = []
-        return results
-
     @staticmethod
     def get_pr(
         pred_kp: torch.Tensor, gt_kp: torch.Tensor, tol: int = 3
@@ -1021,33 +896,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         Returns: dict, containing the computed metrics
         """
         return {}
-
-    def _get_warped_outputs(self, data: dict) -> tuple[dict, list[torch.Tensor]]:
-        """
-        given image data. Generate random homographies, warp the input images with them and run the joint
-        point line detection on the warped images.
-
-        Returns: tuple - (jpl output from warped images, homographies used to warp original image)
-        """
-        imgs = data["image"]
-        device = data["image"].device
-        batch_size = imgs.shape[0]
-        data_shape = imgs.shape[2:]
-        warped_imgs = torch.empty(imgs.shape, dtype=torch.float, device=device)
-        Hs = torch.empty((batch_size, 3, 3), dtype=torch.float, device=device)
-        for i in range(batch_size):
-            H = torch.tensor(
-                sample_homography_deeplsd(data_shape, **default_H_params),
-                dtype=torch.float,
-                device=device,
-            )
-            Hs[i] = H
-            warped_imgs[i] = warp_perspective(
-                imgs[i].unsqueeze(0), H.unsqueeze(0), data_shape, mode="bilinear"
-            )
-        with torch.no_grad():
-            warped_outputs = self({"image": warped_imgs})
-        return warped_outputs, Hs
 
     # Utility methods for line distance-field for (de)normalization
     def normalize_df(self, df: torch.Tensor) -> torch.Tensor:

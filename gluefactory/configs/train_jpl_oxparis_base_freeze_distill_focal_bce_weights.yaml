@@ -37,7 +37,6 @@ model:
     line_neighborhood: 5
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # # if activated the DKD module will apply arg-softmax refinement of keypoint positions
-    use_line_anglefield: False   # if set to false, model will be initialized without AF branch and AF will not be output or considered in inference or training
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
     freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them)
     training:
