@@ -1,28 +1,20 @@
 import logging
-from pathlib import Path
 
-import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from kornia.geometry.transform import warp_perspective
-from omegaconf import OmegaConf
 
-from gluefactory.geometry.homography import warp_points_torch
 from gluefactory.geometry.kp_losses import soft_argmax_only_loss
-from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.models import get_model
 from gluefactory.models.backbones.backbone_encoder import AlikedEncoder, aliked_cfgs
 from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
-from gluefactory.models.deeplsd_inference import DeepLSD
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
 from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.models.extractors.dedode import DeDoDeDetector
 from gluefactory.models.extractors.superpoint_open import SuperPoint
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
 from gluefactory.models.extractors.dad_distill import DadDistillDetector
-from gluefactory.settings import DATA_PATH
 from gluefactory.utils.misc import change_dict_key
 from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 
@@ -171,8 +163,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
         else:
             self.descriptor_branch = DeDoDeDetector({})
-            
-        
+
         # Line distance field decoder similar to that in DeepLSD
         self.distance_field_branch = nn.Sequential(
             nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
@@ -189,7 +180,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
             nn.ReLU(),
         )
-
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
         if conf.training.do and conf.training.aliked_pretrained:
