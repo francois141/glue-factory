@@ -39,7 +39,6 @@ model:
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
     training:
         do: True
-        df_only: True
         aliked_pretrained: True
         pretrain_kp_decoder: True
         train_descriptors:
