@@ -80,14 +80,14 @@ class FastLSDLineExtractor(BaseModel):
             )[:, :4].reshape(-1, 2, 2)
         elif self.conf.lsd_type == "old":
             # Compute grad angle old style
-            img_grad_angle = compute_image_grad(img.detach().cpu().numpy(), 7, self.conf.sigma)[3]
-            angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
-            angle[gradnorm.detach().cpu().numpy() < self.conf.grad_thresh] = -1024
+            img_grad_angle = compute_image_grad(img, 7, self.conf.sigma)
+            angle = (img_grad_angle - torch.pi / 2) % (2 * torch.pi)
+            angle[gradnorm < self.conf.grad_thresh] = -1024
             lines = lsd(
                 img.detach().cpu().numpy().astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
-                gradangle=angle,
+                gradangle=angle.detach().cpu().numpy(),
                 grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
         elif self.conf.lsd_type == "best":
@@ -110,15 +110,15 @@ class FastLSDLineExtractor(BaseModel):
             )[:, :4].reshape(-1, 2, 2)
         elif self.conf.lsd_type == "point":
             interests_points = extract_all_points_sorted_by_gradient(gradnorm)
-            img_grad_angle = compute_image_grad(img.detach().cpu().numpy(), 7, self.conf.sigma)[3]
-            angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
-            angle[gradnorm.detach().cpu().numpy() < self.conf.grad_thresh] = -1024
+            img_grad_angle = compute_image_grad(img, 7, self.conf.sigma)
+            angle = (img_grad_angle - torch.pi / 2) % (2 * torch.pi)
+            angle[gradnorm < self.conf.grad_thresh] = -1024
             lines = lsd_from_points(
                 img.detach().cpu().numpy().astype(np.float64),
                 interests_points.detach().cpu().numpy().astype(np.float64),
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
-                gradangle=angle,
+                gradangle=angle.detach().cpu().numpy(),
                 grad_nfa=False
             )[:, :4].reshape(-1, 2, 2)
 
