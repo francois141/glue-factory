@@ -9,6 +9,9 @@ import torch
 import torch.nn.functional as F
 from omegaconf import OmegaConf
 import torchvision.transforms as T
+import torch
+import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 
 from ..geometry.wrappers import Camera
 
@@ -229,17 +232,44 @@ def normalize_coords(coords, hw: tuple[int, int] | None = None) -> torch.Tensor:
     coords[..., 1] = coords[..., 1] / (hw[0] - 1) * 2 - 1
     return coords
 
-def compute_image_grad(img, ksize=7, sigma=1.0):
-    blur_img = cv2.GaussianBlur(img, (ksize, ksize), sigma).astype(np.float32)
-    dx = np.zeros_like(blur_img)
-    dy = np.zeros_like(blur_img)
+
+def compute_image_grad(img: torch.Tensor, ksize: int = 7, sigma: float = 1.0):
+    """
+    Compute image gradient with Gaussian blur in PyTorch (using torchvision's GaussianBlur).
+    Args:
+        img (torch.Tensor): Input image tensor of shape (H, W) or (1, H, W).
+        ksize (int): Gaussian kernel size (must be odd).
+        sigma (float): Gaussian sigma.
+    Returns:
+        dx, dy, gradnorm, gradangle (torch.Tensor)
+    """
+    # ensure 3D tensor (C=1 for grayscale)
+    if img.ndim == 2:
+        img = img.unsqueeze(0).unsqueeze(0)  # (1,1,H,W)
+    elif img.ndim == 3:
+        img = img.unsqueeze(0)  # (1,C,H,W)
+    else:
+        raise ValueError("Expected input shape (H,W) or (C,H,W)")
+
+    # apply Gaussian blur (torchvision keeps same device/dtype)
+    blur_img = TF.gaussian_blur(img.float(), kernel_size=ksize, sigma=sigma)
+
+    # remove batch/channel for consistency with numpy code
+    blur_img = blur_img.squeeze(0).squeeze(0)
+
+    # compute gradients
+    dx = torch.zeros_like(blur_img)
+    dy = torch.zeros_like(blur_img)
+
     dx[:, 1:] = (blur_img[:, 1:] - blur_img[:, :-1]) / 2
     dx[1:, 1:] = dx[:-1, 1:] + dx[1:, 1:]
+
     dy[1:] = (blur_img[1:] - blur_img[:-1]) / 2
     dy[1:, 1:] = dy[1:, :-1] + dy[1:, 1:]
-    gradnorm = np.sqrt(dx**2 + dy**2)
-    gradangle = np.arctan2(dy, dx)
-    return dx, dy, gradnorm, gradangle
+
+    gradangle = torch.atan2(dy, dx)
+
+    return gradangle
 
 def compute_lsd_image_gradient(in_tensor: torch.Tensor) -> torch.Tensor:
     device = in_tensor.device
