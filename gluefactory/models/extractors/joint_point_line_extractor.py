@@ -326,6 +326,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
             score_map_padded
         )  # B x 1 x H x W
 
+        # Used to visualise the intermediate backbone using PCA
+        output["backbone"] = feature_map
+
         # For storing, remove additional dimension but keep batch dimension even if its 1
         # but keep additional dimension for variable -> needed by dkd
         if keypoint_and_junction_score_map.shape[0] == 1:
