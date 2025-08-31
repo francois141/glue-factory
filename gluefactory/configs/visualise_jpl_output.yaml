@@ -1,13 +1,13 @@
 data:
-    name: gluefactory.datasets.oxford_paris_mini_1view_jpldd_100k
-    data_dir: "oxparis_100k"  # as subdirectory of DATA_PATH(defined in settings.py)
+    name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
+    data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
     grayscale: False
     num_workers: 16  # number of workers used by the Dataloader: recommended 4 * n_gpus (also given for all gpus)
     train_batch_size: 8  # given for all gpus
     val_batch_size: 8
     prefetch_factor: 2
     reshape: 800  # new resizing keeps aspect ratio so quadratic image is not guaranteed
-    square_pad: True  # thus for a batchsize > 1 square padding needs to be activated for batching
+    square_pad: False  # thus for a batchsize > 1 square padding needs to be activated for batching
     multiscale_learning:
         do: False  # to use multiscale training, reshape must be set to false
         scales_list: [1000, 800, 600, 400]
@@ -20,7 +20,6 @@ model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
   name: two_view_pipeline
   extractor:
     name: extractors.joint_point_line_extractor
-    backbone: "vit"
     max_num_keypoints: 2048  # setting for training, for eval: -1
     detection_threshold: 0.0 # set to <= 0 for training, for eval without fixed num of kp, do set to a good value
     nms_radius: 3
