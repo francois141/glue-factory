@@ -1,0 +1,44 @@
+model:
+  name: two_view_pipeline
+  extractor:
+    name: extractors.joint_point_line_extractor
+    line_df_decoder_channels: 64
+    training:
+      do: False
+    max_num_keypoints: 2048
+    line_detection:
+        do: False
+    checkpoint: assets/jpl_best_with_points.tar
+  matcher:
+    name: matchers.roma
+benchmarks:
+  megadepth1500:
+    data:
+      preprocessing:
+        side: long
+        resize: 1600
+    eval:
+      estimator: poselib
+      ransac_th: -1
+  hpatches:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+    eval:
+      estimator: poselib
+      ransac_th: -1
+    model:
+      extractor:
+        max_num_keypoints: 1024
+  hpatches_lines:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+    eval:
+      estimator: poselib
+      ransac_th: -1
+    model:
+      extractor:
+        max_num_keypoints: 1024
