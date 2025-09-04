@@ -38,7 +38,7 @@ model:
     max_num_keypoints: 1500  # setting for training, for eval: -1
     subpixel_refinement: True  # # if activated the DKD module will apply arg-softmax refinement of keypoint positions
     line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
-    freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them)
+    freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them), also the backbone will be frozen
     training:
         do: True
         two_view: False
@@ -49,14 +49,12 @@ model:
             gt_aliked_model: "aliked-n32"
         loss:
             use_one_view_df_loss: True
-            use_one_view_af_loss: False
             kp_loss_name: "distill_dad_superpoint_bce_weighted"
             kp_loss_parameters:
                 lambda_weighted_bce: 200
                 focal_alpha: 0.25
                 focal_gamma: 2
             loss_weights:
-                one_view_line_af_weight: 1
                 one_view_line_df_weight: 1
                 keypoint_weight: 1
                 one_view_descriptor_weight: 1
