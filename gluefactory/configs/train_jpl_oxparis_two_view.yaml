@@ -14,12 +14,12 @@ data:
     num_workers: 12
     load_features:
         do: True
-        thresh: 0.0
-        max_num_keypoints: 1500
         force_num_keypoints: False # if this is True, need to not load points!
         point_gt:
             load_keypoints: False
             use_score_heatmap: False
+            max_num_keypoints: 63  # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
+            max_num_heatmap_keypoints: -1 # number of gt keypoints used to create heatmap. Set to -1 to use all
         check_exists: True
     seed: 0
 model:
