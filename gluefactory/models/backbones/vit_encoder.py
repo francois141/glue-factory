@@ -1,10 +1,6 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-from gluefactory.models.base_model import BaseModel
 from gluefactory.models.scalelsd_backbone import build_backbone
-from gluefactory.models.scalelsd_backbone.hafm import HAFMencoder
 
 class VITBackbone(torch.nn.Module):
     def __init__(self):

@@ -2,7 +2,6 @@ data:
     name: oxford_paris_2view_jpldd
     data_dir: revisitop1m_POLD2/jpg
     grayscale: False
-    triplet: False
     homography:
       difficulty: 0.5
       max_angle: 30
@@ -17,9 +16,9 @@ data:
         do: True
         thresh: 0.0
         max_num_keypoints: 1500
-        force_num_keypoints: False
+        force_num_keypoints: False # if this is True, need to not load points!
         point_gt:
-            load_points: False
+            load_keypoints: False
             use_score_heatmap: False
         check_exists: True
     seed: 0

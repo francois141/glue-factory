@@ -97,7 +97,6 @@ class OxfordParisTwoViewDataset(BaseDataset):
         "reseed": False,
         # image loading
         "grayscale": False,
-        "triplet": False,
         "right_only": False,  # image0 is orig (rescaled), image1 is right
         # homography
         "homography": {
@@ -122,6 +121,7 @@ class OxfordParisTwoViewDataset(BaseDataset):
             "max_num_keypoints": 500,
             "force_num_keypoints": True,
             "point_gt": {
+                "load_keypoints": False, # whether to load the keypoints as a list of keypoints besides using them for heatmap generation
                 "use_score_heatmap": False,
             },
         },
@@ -144,13 +144,32 @@ class OxfordParisTwoViewDataset(BaseDataset):
             "test": images,
             "all": images,
         }
-        print(f"DATASET OVERALL(NO-SPLIT) IMAGES: {len(images)}")
-        print(f"TRAIN IMAGES: {len(train_images)}")
-        print(f"VAL IMAGES: {len(val_images)}")
+        logger.info(f"DATASET OVERALL(NO-SPLIT) IMAGES: {len(images)}")
+        logger.info(f"TRAIN IMAGES: {len(train_images)}")
+        logger.info(f"VAL IMAGES: {len(val_images)}")
 
     def get_dataset(self, split):
         assert split in ["train", "val", "test", "all"]
         return _Dataset(self.conf, self.images[split], split)
+
+
+def df_and_angle_to_offset(df, angle):
+    """Convert a DF and angle representation back to an offset map."""
+    # Calculate x and y components of the offset using angle and magnitude (df)
+    offset_x = df * np.sin(angle + np.pi / 2)
+    offset_y = df * np.cos(angle + np.pi / 2)
+
+    # Stack offset_x and offset_y to create the offset map
+    offset = np.stack((offset_x, offset_y), axis=-1)
+
+    return offset
+
+
+def offset_to_df_and_angle(offset):
+    """Convert an offset map into a DF and angle representation."""
+    df = np.linalg.norm(offset, axis=-1)
+    angle = np.arctan2(offset[:, :, 0], offset[:, :, 1])
+    return df, angle
 
 
 class _Dataset(torch.utils.data.Dataset):
@@ -200,58 +219,61 @@ class _Dataset(torch.utils.data.Dataset):
         logger.info(f"NUMBER OF IMAGES WITH GT: {len(new_img_path_list)}")
         return new_img_path_list
 
-    def _transform_keypoints(self, features, data):
+    def _transform_keypoints(self, keypoints, keypoint_scores, data):
         """Transform keypoints by a homography, threshold them,
-        and potentially keep only the best ones."""
+        and potentially keep only the best ones.
+    
+        Args:
+            keypoints: Tensor of keypoint coordinates
+            keypoint_scores: Tensor of keypoint scores
+            data: Dictionary containing image data and homography
+        
+        Returns:
+            tuple: (transformed_keypoints, transformed_scores)
+        """
         # Warp points
-        features["keypoints"] = warp_points_torch(
-            features["keypoints"], data["H_"], inverse=False
+        keypoints = warp_points_torch(
+            keypoints, data["H_"], inverse=False
         )
         h, w = data["image"].shape[1:3]
         valid = (
-            (features["keypoints"][:, 0] >= 0)
-            & (features["keypoints"][:, 0] <= w - 1)
-            & (features["keypoints"][:, 1] >= 0)
-            & (features["keypoints"][:, 1] <= h - 1)
+                (keypoints[:, 0] >= 0)
+                & (keypoints[:, 0] <= w - 1)
+                & (keypoints[:, 1] >= 0)
+                & (keypoints[:, 1] <= h - 1)
         )
-        features = {k: v[valid] for k, v in features.items()}
+
+        keypoints = keypoints[valid]
+        keypoint_scores = keypoint_scores[valid]
 
         # Threshold
         if self.conf.load_features.thresh > 0:
-            valid = features["keypoint_scores"] >= self.conf.load_features.thresh
-            features = {k: v[valid] for k, v in features.items()}
+            valid = keypoint_scores >= self.conf.load_features.thresh
+            keypoints = keypoints[valid]
+            keypoint_scores = keypoint_scores[valid]
 
         # Get the top keypoints and pad
         n = self.conf.load_features.max_num_keypoints
         if n > -1:
-            inds = torch.argsort(-features["keypoint_scores"])
-            features = {k: v[inds[:n]] for k, v in features.items()}
+            top_k_indices = torch.argsort(-keypoint_scores)[:n]
+            keypoints = keypoints[top_k_indices]
+            keypoint_scores = keypoint_scores[top_k_indices]
 
+            # TODO: padding might have detrimental effect. Advised to be activated for now
             if self.conf.load_features.force_num_keypoints:
-                features = pad_local_features(
-                    features, self.conf.load_features.max_num_keypoints
+                padded = pad_local_features(
+                    {"keypoints": keypoints, "keypoint_scores": keypoint_scores},
+                    self.conf.load_features.max_num_keypoints
                 )
+                keypoints = padded["keypoints"]
+                keypoint_scores = padded["keypoint_scores"]
+    
+        return keypoints, keypoint_scores
 
-        return features
-
-    def df_and_angle_to_offset(self, df, angle):
-        """Convert a DF and angle representation back to an offset map."""
-        # Calculate x and y components of the offset using angle and magnitude (df)
-        offset_x = df * np.sin(angle + np.pi / 2)
-        offset_y = df * np.cos(angle + np.pi / 2)
-
-        # Stack offset_x and offset_y to create the offset map
-        offset = np.stack((offset_x, offset_y), axis=-1)
-
-        return offset
-
-    def offset_to_df_and_angle(self, offset):
-        """Convert an offset map into a DF and angle representation."""
-        df = np.linalg.norm(offset, axis=-1)
-        angle = np.arctan2(offset[:, :, 0], offset[:, :, 1])
-        return df, angle
-
-    def warp_data(self, img, df, angle, offset, H, ps: list):
+    def _warp_line_data(self, img, df, angle, offset, H, ps: list):
+        """
+        Warps the Distance field, angle field, and offset map according to a homography.
+        """
         h, w = img.shape[:2]
         ps = tuple(ps)
 
@@ -266,8 +288,6 @@ class _Dataset(torch.utils.data.Dataset):
         closest = pix_loc + offset
         warped_closest = warp_points(closest.reshape(-1, 2), H).reshape(h, w, 2)
         warped_pix_loc = warp_points(pix_loc.reshape(-1, 2), H).reshape(h, w, 2)
-        # angle = np.arctan2(warped_closest[:, :, 0] - warped_pix_loc[:, :, 0],
-        #                    warped_closest[:, :, 1] - warped_pix_loc[:, :, 1])
         offset_norm = np.linalg.norm(offset, axis=-1)
         zero_offset = offset_norm < 1e-3
         offset_norm[zero_offset] = 1
@@ -309,6 +329,10 @@ class _Dataset(torch.utils.data.Dataset):
             return self.getitem(idx)
 
     def _read_view(self, img, img_folder, name, H_conf, ps, left=False):
+        """
+        Create data based on loaded data and a homography configuration.
+        For the two-view dataset it is used to create the left and right view.
+        """
         data = sample_homography(img, H_conf, ps)
         data["scene"], data["name"] = name.split("/")
         data["name"] = data["name"][:-4]
@@ -332,32 +356,35 @@ class _Dataset(torch.utils.data.Dataset):
             kps_file = img_folder / "keypoint_scores.npy"
 
             # Load keypoints and scores
-            features["keypoints"] = torch.from_numpy(np.load(kp_file)).to(
-                dtype=torch.float32
+            keypoints = torch.from_numpy(np.load(kp_file)).to(
+                dtype=torch.float32, device=data["image"].device
             )
-            features["keypoint_scores"] = torch.from_numpy(np.load(kps_file)).to(
-                dtype=torch.float32
+            keypoint_scores = torch.from_numpy(np.load(kps_file)).to(
+                dtype=torch.float32, device=data["image"].device
             )
-            features = batch_to_device(features, data["image"].device)
-            features = self._transform_keypoints(features, data)
+
+            keypoints, keypoint_scores = self._transform_keypoints(keypoints, keypoint_scores, data)
 
             # prepare keypoint heatmap
             heatmap = np.zeros_like(data["image"][0], dtype=np.float32)
-            integer_kp_coordinates = torch.round(features["keypoints"]).to(
+            integer_kp_coordinates = torch.round(keypoints).to(
                 dtype=torch.int
             )
 
             if self.conf.load_features.point_gt.use_score_heatmap:
                 heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
-                    features["keypoint_scores"]
+                    keypoint_scores
                 )
             else:
                 heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
                     1.0
                 )
-            heatmap = torch.from_numpy(heatmap).to(dtype=torch.float32)
+            features["superpoint_heatmap"] = torch.from_numpy(heatmap).to(dtype=torch.float32)
 
-            features["superpoint_heatmap"] = heatmap
+            # remove keypoints and scores if configured. Can be configured with 'load_keypoints'
+            if not self.conf.load_features.point_gt.load_keypoints:
+                features["keypoints"] = keypoints
+                features["keypoint_scores"] = keypoint_scores
 
             # Load pickle file for DF max and min values
             with open(img_folder / "values.pkl", "rb") as f:
@@ -383,30 +410,10 @@ class _Dataset(torch.utils.data.Dataset):
             offset = offset * values["max_offset"]
             offset = offset + values["min_offset"]
 
-            """
-            # check offset calculation
-            df, angle = self.offset_to_df_and_angle(offset)
-            assert np.allclose(df, df_img), "DF not equal"
-
-            try:
-                assert np.allclose(angle, af_img), "Angle not equal"
-            except AssertionError:
-                # print values where the angle is not equal
-                print(f"Angle not equal at {np.where(angle != af_img)}")
-                print(f"Angle: {angle[np.where(angle != af_img)]}")
-                print(f"AF: {af_img[np.where(angle != af_img)]}")
-                exit()
-            """
-
             # Warp the DF, and AF according to the homography
-            ref_valid_mask, warped_df, warped_angle, warped_offset = self.warp_data(
+            ref_valid_mask, warped_df, warped_angle, warped_offset = self._warp_line_data(
                 img, df_img, af_img, offset, H, ps
             )
-
-            # convert angle field to 2 channel direction field (x,y)
-            # warped_direction_field = np.stack(
-            #     (np.cos(warped_angle), np.sin(warped_angle)), axis=-1
-            # )
 
             # Add the warped features to the dictionary
             # features["deeplsd_offset_field"] = torch.from_numpy(warped_offset).to(dtype=torch.float32)
@@ -416,11 +423,6 @@ class _Dataset(torch.utils.data.Dataset):
             features["deeplsd_angle_field"] = torch.from_numpy(warped_angle).to(
                 dtype=torch.float32
             )
-            # features["line_level"] = (
-            #     torch.from_numpy(warped_direction_field)
-            #     .to(dtype=torch.float32)
-            #     .permute(2, 0, 1)
-            # )
             features["ref_valid_mask"] = torch.from_numpy(ref_valid_mask).to(
                 dtype=torch.float32
             )
@@ -440,15 +442,15 @@ class _Dataset(torch.utils.data.Dataset):
             img = np.zeros((1024, 1024) + (() if self.conf.grayscale else (3,)))
         img = img.astype(np.float32) / 255.0
         size = img.shape[:2][::-1]
-        ps = self.conf.homography.patch_shape
+        homography_patch_shape = self.conf.homography.patch_shape
 
         left_conf = omegaconf.OmegaConf.to_container(self.conf.homography)
         if self.conf.right_only:
             left_conf["difficulty"] = 0.0
 
-        data0 = self._read_view(img, img_folder_path, name, left_conf, ps, left=True)
+        data0 = self._read_view(img, img_folder_path, name, left_conf, homography_patch_shape, left=True)
         data1 = self._read_view(
-            img, img_folder_path, name, self.conf.homography, ps, left=False
+            img, img_folder_path, name, self.conf.homography, homography_patch_shape, left=False
         )
 
         H = compute_homography(data0["coords"], data1["coords"], [1, 1])
@@ -461,19 +463,6 @@ class _Dataset(torch.utils.data.Dataset):
             "view0": data0,
             "view1": data1,
         }
-
-        if self.conf.triplet:
-            # Generate third image
-            data2 = self._read_view(img, self.conf.homography, ps, left=False)
-            H02 = compute_homography(data0["coords"], data2["coords"], [1, 1])
-            H12 = compute_homography(data1["coords"], data2["coords"], [1, 1])
-
-            data = {
-                "H_0to2": H02.astype(np.float32),
-                "H_1to2": H12.astype(np.float32),
-                "view2": data2,
-                **data,
-            }
 
         return data
 
