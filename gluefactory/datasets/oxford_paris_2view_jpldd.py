@@ -117,12 +117,12 @@ class OxfordParisTwoViewDataset(BaseDataset):
         "load_features": {
             "do": False,
             "check_exists": False,
-            "thresh": 0.0,
-            "max_num_keypoints": 500,
             "force_num_keypoints": True,
             "point_gt": {
                 "load_keypoints": False, # whether to load the keypoints as a list of keypoints besides using them for heatmap generation
                 "use_score_heatmap": False,
+                "max_num_keypoints": 63, # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
+                "max_num_heatmap_keypoints": -1  # number of gt keypoints used to create heatmap. Set to -1 to use all
             },
         },
     }
@@ -245,28 +245,6 @@ class _Dataset(torch.utils.data.Dataset):
 
         keypoints = keypoints[valid]
         keypoint_scores = keypoint_scores[valid]
-
-        # Threshold
-        if self.conf.load_features.thresh > 0:
-            valid = keypoint_scores >= self.conf.load_features.thresh
-            keypoints = keypoints[valid]
-            keypoint_scores = keypoint_scores[valid]
-
-        # Get the top keypoints and pad
-        n = self.conf.load_features.max_num_keypoints
-        if n > -1:
-            top_k_indices = torch.argsort(-keypoint_scores)[:n]
-            keypoints = keypoints[top_k_indices]
-            keypoint_scores = keypoint_scores[top_k_indices]
-
-            # TODO: padding might have detrimental effect. Advised to be activated for now
-            if self.conf.load_features.force_num_keypoints:
-                padded = pad_local_features(
-                    {"keypoints": keypoints, "keypoint_scores": keypoint_scores},
-                    self.conf.load_features.max_num_keypoints
-                )
-                keypoints = padded["keypoints"]
-                keypoint_scores = padded["keypoint_scores"]
     
         return keypoints, keypoint_scores
 
@@ -365,9 +343,16 @@ class _Dataset(torch.utils.data.Dataset):
 
             keypoints, keypoint_scores = self._transform_keypoints(keypoints, keypoint_scores, data)
 
+            # Sort keypoints by score if needed
+            point_cfg = self.conf.load_features.point_gt
+            if point_cfg.max_num_heatmap_keypoints > -1 or (point_cfg.max_num_keypoints > -1 and point_cfg.load_points):
+                top_k_indices = torch.argsort(-keypoint_scores)
+                keypoints = keypoints[top_k_indices]
+                keypoint_scores = keypoint_scores[top_k_indices]
+
             # prepare keypoint heatmap
             heatmap = np.zeros_like(data["image"][0], dtype=np.float32)
-            integer_kp_coordinates = torch.round(keypoints).to(
+            integer_kp_coordinates = torch.round(keypoints[:point_cfg.max_num_heatmap_keypoints]).to(
                 dtype=torch.int
             )
 
@@ -383,8 +368,8 @@ class _Dataset(torch.utils.data.Dataset):
 
             # remove keypoints and scores if configured. Can be configured with 'load_keypoints'
             if not self.conf.load_features.point_gt.load_keypoints:
-                features["keypoints"] = keypoints
-                features["keypoint_scores"] = keypoint_scores
+                features["keypoints"] = keypoints[:point_cfg.max_num_keypoints]
+                features["keypoint_scores"] = keypoint_scores[:point_cfg.max_num_keypoints]
 
             # Load pickle file for DF max and min values
             with open(img_folder / "values.pkl", "rb") as f:
