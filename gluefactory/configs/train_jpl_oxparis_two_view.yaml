@@ -43,7 +43,6 @@ model:
                 gt_aliked_model: "aliked-n32"
             loss:
                 use_one_view_df_loss: True # one-view losses can be applied any time
-                use_one_view_af_loss: False # af loss is only applied if af use is activated
                 use_two_view_df_loss: True # two view losses are only applied if two-view training activated
                 use_one_view_kp_loss: True # use one-view keypoint loss ex. focal, l1 etc
                 kp_loss_name: "focal_loss"
@@ -52,7 +51,6 @@ model:
                     focal_alpha: 0.25
                     focal_gamma: 2
                 loss_weights:
-                    one_view_line_af_weight: 1
                     one_view_line_df_weight: 1
                     two_view_line_df_weight: 1
                     keypoint_weight: 1
