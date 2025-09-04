@@ -2,20 +2,14 @@
 The code comes from: https://github.com/Parskatt/dad
 """
 
-from collections import OrderedDict
-from pathlib import Path
-from types import SimpleNamespace
 
 import torch
-import torch.nn as nn
 
 from ..base_model import BaseModel
-from ..utils.misc import pad_and_stack
 
 from DeDoDe import dedode_detector_L, dedode_descriptor_B
 
 import dad
-from PIL import Image
 
 class DadDetector(BaseModel):
     default_conf = {

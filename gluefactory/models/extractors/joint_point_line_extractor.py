@@ -138,7 +138,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 aliked_model_cfg
             )
         else:
-            print("Unknown backbone")
+            logger.warning(f"Unknown backbone {self.conf.backbone}!")
             raise NotImplementedError
 
         self.keypoint_and_junction_branch = SMH(dim)  # using SMH from ALIKE here
@@ -202,6 +202,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # load model checkpoint if given -> only load weights
         if conf.checkpoint is not None:
+            # if local file - load from disk
             if Path(conf.checkpoint).exists():
                 logger.warning(
                     f"Load model parameters from local checkpoint {conf.checkpoint}"
@@ -209,6 +210,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 chkpt_statedict = torch.load(
                     conf.checkpoint, map_location=torch.device("cpu")
                 )
+            # else try to load from url
             else:
                 logger.warning(
                     f"Try Load model parameters from URL checkpoint {conf.checkpoint}"
@@ -231,16 +233,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.load_state_dict(
                 chkpt_statedict["model"], strict=False
             )  # set to True to check if all keys are present (mlp weights are not present as we removed them above)
-        elif conf.checkpoint is not None:
-            chkpt_statedict = torch.hub.load_state_dict_from_url(
-                conf.checkpoint, map_location=torch.device("cpu")
-            )
-            # Extract from two-view
-            chkpt_statedict["model"] = {
-                k.split("extractor.")[-1]: v
-                for k, v in chkpt_statedict["model"].items()
-            }
-            self.load_state_dict(chkpt_statedict["model"], strict=False)
 
         logger.info(f"Load line extractor: {self.conf.line_detection.name}")
         self.line_extractor = get_model(self.conf.line_detection.name)(
@@ -262,21 +254,23 @@ class JointPointLineDetectorDescriptor(BaseModel):
             for param in self.distance_field_branch.parameters():
                 param.requires_grad = False
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.dad_model = DadDetector({
-            "max_num_keypoints": None,
-            "nms_radius": 4,
-            "detection_threshold": 0.005,
-            "remove_borders": 4,
-            "descriptor_dim": 256,
-            "channels": [64, 64, 128, 128, 256],
-            "dense_outputs": None,
-            "weights": None,  # local path of pretrained weights
-        }).to(device)
-        self.dad_model.eval().to(device)
+        if self.conf.training.do and "distill" in self.conf.training.loss.kp_loss_name:
+            logger.info("Loading Super-point and DAD model for distillation")
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.dad_model = DadDetector({
+                "max_num_keypoints": None,
+                "nms_radius": 4,
+                "detection_threshold": 0.005,
+                "remove_borders": 4,
+                "descriptor_dim": 256,
+                "channels": [64, 64, 128, 128, 256],
+                "dense_outputs": None,
+                "weights": None,  # local path of pretrained weights
+            }).to(device)
+            self.dad_model.eval().to(device)
 
-        self.superpoint_model = SuperPoint({}).to(device)
-        self.superpoint_model.eval().to(device)
+            self.superpoint_model = SuperPoint({}).to(device)
+            self.superpoint_model.eval().to(device)
 
     def _forward(self, data: dict) -> torch.Tensor:
         """
@@ -484,7 +478,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 * losses["one_view_line_df"]
             )
 
-        # Use BCE, WeightedBCE or Focal Loss for point position loss
+        # Use BCE, WeightedBCE, Focal Loss or KL Divergence for point heatmap loss.
+        # Generate ground truth on the fly if using dad and/or superpoint distill config
         if self.conf.training.loss.use_one_view_kp_loss:
             if self.conf.training.loss.kp_loss_name == "distill": 
                 keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
