@@ -20,3 +20,4 @@ slurm*
 eval/
 
 /dataset/revisitop1m/
+*.out

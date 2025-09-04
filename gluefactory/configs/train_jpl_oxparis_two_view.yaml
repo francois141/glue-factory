@@ -16,10 +16,11 @@ data:
     load_features:
         do: True
         thresh: 0.0
-        max_num_keypoints: 1000
-        force_num_keypoints: True
+        max_num_keypoints: 1500
+        force_num_keypoints: False
         point_gt:
-            use_score_heatmap: True
+            load_points: False
+            use_score_heatmap: False
         check_exists: True
     seed: 0
 model:
@@ -29,9 +30,9 @@ model:
         model_name: "aliked-n16"
         trainable: True # needs to be set explicitly here as two-view is not trainable
         line_neighborhood: 5
-        max_num_keypoints: 1000  # setting for training, for eval: -1
+        max_num_keypoints: 1500  # setting for training, for eval: -1
         subpixel_refinement: True # if activated the DKD module will apply arg-softmax refinement of keypoint positions
-            line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
+        line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
         training:
             do: True
             two_view: True
@@ -42,7 +43,7 @@ model:
                 use_two_view_loss: True # use sparse nre loss to train descriptors
                 gt_aliked_model: "aliked-n32"
             loss:
-                use_one_view_df_loss: False # one-view losses can be applied any time
+                use_one_view_df_loss: True # one-view losses can be applied any time
                 use_one_view_af_loss: False # af loss is only applied if af use is activated
                 use_two_view_df_loss: True # two view losses are only applied if two-view training activated
                 use_one_view_kp_loss: True # use one-view keypoint loss ex. focal, l1 etc
@@ -58,7 +59,7 @@ model:
                     keypoint_weight: 1
                     one_view_descriptor_weight: 1
                     two_view_descriptor_weight: 1
-                    softargmax_weight: 0 # if > 0 activates calculation of soft argmax loss on keypoint detection
+                    softargmax_weight: 0.5 # if > 0 activates calculation of soft argmax loss on keypoint detection
         line_detection:
             do: False
         checkpoint: null  # if given load model weights from this checkpoint
