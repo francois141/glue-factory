@@ -48,7 +48,7 @@ model:
             use_one_view_loss: True # train with direct supervision of descriptors with ground truth descriptors
             gt_aliked_model: "aliked-n32"
         loss:
-            use_one_view_df_loss: True
+            use_one_view_df_loss: False
             kp_loss_name: "distill_dad_superpoint_bce_weighted"
             kp_loss_parameters:
                 lambda_weighted_bce: 200
