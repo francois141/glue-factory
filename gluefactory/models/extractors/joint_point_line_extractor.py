@@ -38,7 +38,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
         "aliked_model_name": "aliked-n16",  # ALIKED model determining architecture of our backbone
         "line_df_decoder_channels": 32,
-        "line_af_decoder_channels": 32,
         "max_num_keypoints": 1024,  # setting for training, for eval: -1
         "detection_threshold": -1,  # setting for training, for eval: 0.2
         "nms_radius": 3,
@@ -58,7 +57,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             },
             "loss": {
                 "use_one_view_df_loss": True,  # one-view losses can be applied any time
-                "use_one_view_af_loss": True,  # af loss is only applied if af-use is activated
                 "use_two_view_df_loss": True,  # two view losses are only applied if two-view training activated
                 "use_one_view_kp_loss": True,  # use one-view keypoint loss ex. focal, l1 etc
                 "kp_loss_name": "focal_loss",  # other options: bce, weighted_bce or focal loss
@@ -70,7 +68,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 },
                 "refinement_radius": 5,  # radius for softargmax loss
                 "loss_weights": {
-                    "one_view_line_af_weight": 1,
                     "one_view_line_df_weight": 1,
                     "two_view_line_df_weight": 1,
                     "keypoint_weight": 1,
@@ -421,8 +418,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         If predictions contain padding_mask we consider this on loss calculation
         1. On Keypoint-ScoreMap:        weighted BCE Loss / BCE Loss / Focal Loss
         2. On Keypoint-Descriptors:     L1 loss
-        3. On Line-Angle Field:         use angle loss from deepLSD paper (ONLY IF AF ACTIVATED!)
-        4. On Line-Distance Field:      use L1 loss on normalized versions of Distance field (as in deepLSD paper)
+        3. On Line-Distance Field:      use L1 loss on normalized versions of Distance field (as in deepLSD paper)
         """
 
         losses = {}
