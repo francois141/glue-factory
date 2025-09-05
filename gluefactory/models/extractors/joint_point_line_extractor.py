@@ -256,7 +256,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         if self.conf.training.do and "distill" in self.conf.training.loss.kp_loss_name:
             logger.info("Loading Super-point and DAD model for distillation")
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.dad_model = DadDetector({
                 "max_num_keypoints": None,
                 "nms_radius": 4,
@@ -266,11 +265,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "channels": [64, 64, 128, 128, 256],
                 "dense_outputs": None,
                 "weights": None,  # local path of pretrained weights
-            }).to(device)
-            self.dad_model.eval().to(device)
-
-            self.superpoint_model = SuperPoint({}).to(device)
-            self.superpoint_model.eval().to(device)
+            })
+            self.dad_model.eval()
+            self.superpoint_model = SuperPoint({})
+            self.superpoint_model.eval()
 
     def _forward(self, data: dict) -> torch.Tensor:
         """
