@@ -372,7 +372,7 @@ class _Dataset(torch.utils.data.Dataset):
                 keypoints = keypoints[:max_num]
                 keypoint_scores = keypoint_scores[:max_num]
 
-                if self.conf.load_features.force_num_keypoints:
+                if self.conf.load_features.point_gt.force_num_keypoints:
                     padded = pad_local_features(
                         {"keypoints": keypoints, "keypoint_scores": keypoint_scores},
                         self.conf.load_features.max_num_keypoints
