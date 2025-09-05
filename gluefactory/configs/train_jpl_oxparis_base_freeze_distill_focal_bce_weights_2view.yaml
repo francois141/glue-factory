@@ -14,8 +14,8 @@ data:
         p: 0.75
     load_features:
         do: True
-        force_num_keypoints: False # if this is True, need to not load points!
         point_gt:
+            force_num_keypoints: False # if this is True, need to not load points!
             load_keypoints: False
             use_score_heatmap: False
             max_num_keypoints: 63  # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.

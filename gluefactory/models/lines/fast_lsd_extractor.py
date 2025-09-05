@@ -1,5 +1,3 @@
-from typing import Optional
-
 import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
