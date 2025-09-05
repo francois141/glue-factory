@@ -24,37 +24,39 @@ data:
     val_size: 500
     train_size: 11500
 model:
-    name: joint_point_line_extractor
-    model_name: "aliked-n16"
-    line_neighborhood: 5
-    max_num_keypoints: 1500  # setting for training, for eval: -1
-    subpixel_refinement: True  # # if activated the DKD module will apply arg-softmax refinement of keypoint positions
-    line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
-    freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them), also the backbone will be frozen
-    training:
-        do: True
-        two_view: True
-        aliked_pretrained: True
-        pretrain_kp_decoder: True
-        train_descriptors:
-            use_one_view_loss: True # train with direct supervision of descriptors with ground truth descriptors
-            gt_aliked_model: "aliked-n32"
-            use_two_view_loss: False # use sparse nre loss to train descriptors
-        loss:
-            use_one_view_df_loss: False # as distance field branch + backbone is frozen, no change in update or output quality
-            use_one_view_kp_loss: True # use one-view keypoint loss ex. focal, l1 etc
-            kp_loss_name: "distill_dad_superpoint_bce_weighted"
-            kp_loss_parameters:
-                lambda_weighted_bce: 200
-                focal_alpha: 0.25
-                focal_gamma: 2
-            loss_weights:
-                keypoint_weight: 1
-                one_view_descriptor_weight: 1
-                softargmax_weight: 1
-    line_detection:
-      do: False
-    checkpoint: assets/jpl_best_with_points.tar  # if given load model weights from this checkpoint
+    name: two_view_pipeline
+    extractor:
+        name: joint_point_line_extractor
+        model_name: "aliked-n16"
+        line_neighborhood: 5
+        max_num_keypoints: 1500  # setting for training, for eval: -1
+        subpixel_refinement: True  # # if activated the DKD module will apply arg-softmax refinement of keypoint positions
+        line_df_decoder_channels: 64  # number of channels in CNN for af/df decoder branches
+        freeze_lines: True  # if set to true, the line extractor and distance field branch will be frozen (no gradients are computed for them), also the backbone will be frozen
+        training:
+            do: True
+            two_view: True
+            aliked_pretrained: True
+            pretrain_kp_decoder: True
+            train_descriptors:
+                use_one_view_loss: True # train with direct supervision of descriptors with ground truth descriptors
+                gt_aliked_model: "aliked-n32"
+                use_two_view_loss: False # use sparse nre loss to train descriptors
+            loss:
+                use_one_view_df_loss: False # as distance field branch + backbone is frozen, no change in update or output quality
+                use_one_view_kp_loss: True # use one-view keypoint loss ex. focal, l1 etc
+                kp_loss_name: "distill_dad_superpoint_bce_weighted"
+                kp_loss_parameters:
+                    lambda_weighted_bce: 200
+                    focal_alpha: 0.25
+                    focal_gamma: 2
+                loss_weights:
+                    keypoint_weight: 1
+                    one_view_descriptor_weight: 1
+                    softargmax_weight: 1
+        line_detection:
+          do: False
+        checkpoint: assets/jpl_best_with_points.tar  # if given load model weights from this checkpoint
 train:
     load_experiment: null  # initialize the model from a previous experiment (take weights)
     seed: 7
