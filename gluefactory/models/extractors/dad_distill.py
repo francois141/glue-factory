@@ -2,19 +2,11 @@
 The code comes from: https://github.com/Parskatt/dad
 """
 
-from collections import OrderedDict
-from pathlib import Path
-from types import SimpleNamespace
-
 import torch
-import torch.nn as nn
 
 from ..base_model import BaseModel
-from ..utils.misc import pad_and_stack
 
 import dad
-from dad.loss import MaxDistillLoss
-from PIL import Image
 
 class DadDistillDetector(BaseModel):
     default_conf = {
