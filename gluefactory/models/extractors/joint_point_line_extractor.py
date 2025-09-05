@@ -481,18 +481,19 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Use BCE, WeightedBCE, Focal Loss or KL Divergence for point heatmap loss.
         # Generate ground truth on the fly if using dad and/or superpoint distill config
         if self.conf.training.loss.use_one_view_kp_loss:
+            image_data = {'image': img}
             if self.conf.training.loss.kp_loss_name == "distill": 
-                keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(data, prediction_dict["keypoint_and_junction_score_map"])
+                keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(image_data, prediction_dict["keypoint_and_junction_score_map"])
             elif self.conf.training.loss.kp_loss_name == "distill_dad":
-                ground_heatmap = self.dad_model(data)["heatmap"]
+                ground_heatmap = self.dad_model(image_data)["heatmap"]
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
                 ).mean(dim=(1, 2))
             elif "distill_dad_superpoint" in self.conf.training.loss.kp_loss_name:
                 with torch.no_grad():  
-                    ground_heatmap1 = self.dad_model(data)["heatmap"]
-                    ground_heatmap2 = self.superpoint_model(data)["heatmap"]
+                    ground_heatmap1 = self.dad_model(image_data)["heatmap"]
+                    ground_heatmap2 = self.superpoint_model(image_data)["heatmap"]
                     ground_heatmap = torch.max(ground_heatmap1, ground_heatmap2)
                 keypoint_scoremap_loss = self.loss_fn(
                     prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
