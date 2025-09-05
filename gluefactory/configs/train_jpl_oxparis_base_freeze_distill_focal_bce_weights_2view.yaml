@@ -27,6 +27,7 @@ model:
     name: two_view_pipeline
     extractor:
         name: joint_point_line_extractor
+        trainable: True
         model_name: "aliked-n16"
         line_neighborhood: 5
         max_num_keypoints: 1500  # setting for training, for eval: -1
