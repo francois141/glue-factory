@@ -2,10 +2,6 @@
 The code comes from: https://github.com/Parskatt/dad
 """
 
-from collections import OrderedDict
-from pathlib import Path
-from types import SimpleNamespace
-
 import torch
 
 from gluefactory.models.lines.scalelsd import ScaleLSD

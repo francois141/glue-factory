@@ -4,12 +4,10 @@ import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
 from pytlsd import lsd, lsd_from_points, lsd_df, lsd_opt, lsd_from_points_learn
-from gluefactory.utils.image import compute_lsd_image_gradient, extract_all_points_sorted_by_gradient
+from gluefactory.utils.image import extract_all_points_sorted_by_gradient
 
-from gluefactory.models.lines.line_refinement import filter_outlier_lines, merge_lines
-from gluefactory.models.lines.line_utils import preprocess_angle
+from gluefactory.models.lines.line_refinement import merge_lines
 from gluefactory.utils.image import compute_image_grad
-import torchvision.transforms as T
 
 from ..base_model import BaseModel
     

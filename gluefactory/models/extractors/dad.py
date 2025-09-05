@@ -2,12 +2,11 @@
 The code comes from: https://github.com/Parskatt/dad
 """
 
-
 import torch
 
 from ..base_model import BaseModel
 
-from DeDoDe import dedode_detector_L, dedode_descriptor_B
+from DeDoDe import dedode_descriptor_B
 
 import dad
 
