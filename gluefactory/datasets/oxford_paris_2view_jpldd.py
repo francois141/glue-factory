@@ -117,8 +117,8 @@ class OxfordParisTwoViewDataset(BaseDataset):
         "load_features": {
             "do": False,
             "check_exists": False,
-            "force_num_keypoints": True,
             "point_gt": {
+                "force_num_keypoints": True,
                 "load_keypoints": False, # whether to load the keypoints as a list of keypoints besides using them for heatmap generation
                 "use_score_heatmap": False,
                 "max_num_keypoints": 63, # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
@@ -345,7 +345,7 @@ class _Dataset(torch.utils.data.Dataset):
 
             # Sort keypoints by score if needed
             point_cfg = self.conf.load_features.point_gt
-            if point_cfg.max_num_heatmap_keypoints > -1 or (point_cfg.max_num_keypoints > -1 and point_cfg.load_points):
+            if point_cfg.max_num_heatmap_keypoints > -1 or (point_cfg.max_num_keypoints > -1 and point_cfg.load_keypoints):
                 top_k_indices = torch.argsort(-keypoint_scores)
                 keypoints = keypoints[top_k_indices]
                 keypoint_scores = keypoint_scores[top_k_indices]
@@ -368,8 +368,20 @@ class _Dataset(torch.utils.data.Dataset):
 
             # remove keypoints and scores if configured. Can be configured with 'load_keypoints'
             if not self.conf.load_features.point_gt.load_keypoints:
-                features["keypoints"] = keypoints[:point_cfg.max_num_keypoints]
-                features["keypoint_scores"] = keypoint_scores[:point_cfg.max_num_keypoints]
+                max_num = min(point_cfg.max_num_keypoints, keypoints.shape[0])
+                keypoints = keypoints[:max_num]
+                keypoint_scores = keypoint_scores[:max_num]
+
+                if self.conf.load_features.force_num_keypoints:
+                    padded = pad_local_features(
+                        {"keypoints": keypoints, "keypoint_scores": keypoint_scores},
+                        self.conf.load_features.max_num_keypoints
+                    )
+                    keypoints = padded["keypoints"]
+                    keypoint_scores = padded["keypoint_scores"]
+
+                features["keypoints"] = keypoints
+                features["keypoint_scores"] = keypoint_scores
 
             # Load pickle file for DF max and min values
             with open(img_folder / "values.pkl", "rb") as f:
