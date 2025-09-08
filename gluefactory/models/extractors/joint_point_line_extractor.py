@@ -256,8 +256,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         if self.conf.training.do and "distill" in self.conf.training.loss.kp_loss_name:
             logger.info("Loading Super-point and DAD model for distillation")
+            # For both dad and sp we fix number of returned keypoints as batching only works with fixed number of points
+            # The number of points itself is irrelevant as we only use heatmap
             self.dad_model = DadDetector({
-                "max_num_keypoints": None,
+                "max_num_keypoints": 1024,
                 "nms_radius": 4,
                 "detection_threshold": 0.005,
                 "remove_borders": 4,
@@ -267,7 +269,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "weights": None,  # local path of pretrained weights
             })
             self.dad_model.eval()
-            self.superpoint_model = SuperPoint({})
+            self.superpoint_model = SuperPoint({
+                "max_num_keypoints": 1500,
+                "force_num_keypoints": True
+            })
             self.superpoint_model.eval()
 
     def _forward(self, data: dict) -> torch.Tensor:
