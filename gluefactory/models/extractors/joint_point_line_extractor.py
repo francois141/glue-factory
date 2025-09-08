@@ -660,8 +660,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
             loc_loss = soft_argmax_only_loss(
                 pred["keypoint_and_junction_score_map0"],
                 pred["keypoint_and_junction_score_map1"],
-                gt_dict_view0["keypoints"],
-                gt_dict_view0["keypoint_scores"] > 0,
+                prediction_dict["keypoints"],
+                prediction_dict["keypoint_scores"] > 0,
                 H,
                 self.conf.training.loss.refinement_radius,
             )
