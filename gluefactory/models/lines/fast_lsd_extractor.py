@@ -23,7 +23,7 @@ class FastLSDLineExtractor(BaseModel):
 
     default_conf = {
         "name": "lines.fast_lsd_extractor",
-        "min_length": 15,
+        "min_length": -1,
         "max_num_lines": None,
         "force_num_lines": False,
         "use_img_grad_angle": True,  # Dont use the angle-field but use the image gradient as surrogate
@@ -126,15 +126,16 @@ class FastLSDLineExtractor(BaseModel):
         lines = torch.tensor(lines)
 
         # Now perform optional min length filtering and apply force num lines if needed
-        lengths = torch.norm(lines[:, 0] - lines[:, 1], dim=1)
-        to_keep = lengths >= self.conf.min_length
-        lines, lengths = lines[to_keep], lengths[to_keep]
+        if self.conf.min_length:
+            lengths = torch.norm(lines[:, 0] - lines[:, 1], dim=1)
+            to_keep = lengths >= self.conf.min_length
+            lines, lengths = lines[to_keep], lengths[to_keep]
 
         # Keep the best lines (best lines are the shortest ones)
-        scores = torch.sqrt(lengths)
-        lines = lines[:, :4].reshape(-1, 2, 2)
-        indices = torch.argsort(-scores)
         if self.conf.max_num_lines is not None:
+            scores = torch.sqrt(lengths)
+            lines = lines[:, :4].reshape(-1, 2, 2)
+            indices = torch.argsort(-scores)
             indices = indices[: self.conf.max_num_lines]
             lines = lines[indices]
 
@@ -143,9 +144,10 @@ class FastLSDLineExtractor(BaseModel):
                 lines, thresh=4, overlap_thresh=0
             )
 
-        # Pad if necessary
         n = len(lines)
         valid_mask = torch.ones(n, dtype=bool, device=lines.device)
+
+        # Pad if necessary
         if self.conf.force_num_lines:
             pad = self.conf.max_num_lines - n
             if pad > 0:
@@ -177,14 +179,18 @@ class FastLSDLineExtractor(BaseModel):
             return line_pred["lines"], line_pred["valid_lines"]
 
         results = []
-        # Use ThreadPoolExecutor to parallelize across batch dimension
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(process_one, img, df, ll)
-                for img, df, ll in zip(image, line_df_denormalized, line_level)
-            ]
-            for f in futures:
-                results.append(f.result())
+
+        if len(image) == 1:
+            results.append(process_one(image[0], line_df_denormalized[0], line_level[0]))
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(process_one, img, df, ll)
+                    for img, df, ll in zip(image, line_df_denormalized, line_level)
+                ]
+                for f in futures:
+                    results.append(f.result())
 
         # Unpack results
         lines, valid_lines = zip(*results)

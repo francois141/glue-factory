@@ -369,10 +369,6 @@ def extract_all_points_sorted_by_gradient(gradient: torch.Tensor, percentile: fl
     # --- Extract intensities ---
     intensities = gradient[positions[:, 0], positions[:, 1]]
 
-    # --- Distance to the center ---
-    center = torch.tensor([gradient.size(0)/2, gradient.size(1)/2], device=gradient.device)
-    distances = torch.norm(positions - center, dim=1)
-
     # --- Filter by intensity percentile ---
     threshold = torch.quantile(intensities, percentile / 100.0)
     mask_percentile = intensities >= threshold
