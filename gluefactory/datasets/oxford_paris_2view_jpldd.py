@@ -366,8 +366,8 @@ class _Dataset(torch.utils.data.Dataset):
                 )
             features["superpoint_heatmap"] = torch.from_numpy(heatmap).to(dtype=torch.float32)
 
-            # remove keypoints and scores if configured. Can be configured with 'load_keypoints'
-            if not self.conf.load_features.point_gt.load_keypoints:
+            # load keypoints and scores if configured. Can be configured with 'load_keypoints'
+            if self.conf.load_features.point_gt.load_keypoints:
                 max_num = min(point_cfg.max_num_keypoints, keypoints.shape[0])
                 keypoints = keypoints[:max_num]
                 keypoint_scores = keypoint_scores[:max_num]
