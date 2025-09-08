@@ -10,3 +10,9 @@
 [submodule "other/dad"]
 	path = other/dad
 	url = https://github.com/Parskatt/dad
+[submodule "other/DeDoDe"]
+	path = other/DeDoDe
+	url = https://github.com/Parskatt/DeDoDe
+[submodule "other/points_lsd"]
+	path = other/points_lsd
+	url = https://github.com/francois141/points_lsd

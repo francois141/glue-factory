@@ -12,6 +12,8 @@ packages=(
     "other/faster_pytlsd"
     "other/homography_est"
     "other/dad"
+    "other/points_lsd"
+    "other/DeDoDe"
 )
 
 for dir in "${packages[@]}"; do
