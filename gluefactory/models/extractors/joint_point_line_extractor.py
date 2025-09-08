@@ -522,7 +522,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 **self.get_groundtruth_descriptors(
                     {
                         "keypoints": prediction_dict["keypoints_raw"],
-                        "image": gt_dict_view0["image"],
+                        "image": img,
                     }
                 ),
             }
