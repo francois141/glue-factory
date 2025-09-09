@@ -1,3 +1,77 @@
+# 🚀 Running JPL — Step-by-Step Guide
+
+This guide explains how to install, configure, and run JPL within the **gluefactory** environment.  
+
+---
+
+## 📦 1. Install the Codebase
+
+First, set up a Python virtual environment and install the dependencies.
+
+```bash
+# Create and activate a virtual environment
+python3 -m venv myenv
+source myenv/bin/activate
+
+# Install JPL
+python3 -m pip install -e .
+./install.sh
+```
+
+⚠️ **Note:** Some repositories are private — request access before running the installation.
+
+---
+
+## ⚙️ 2. Configure the Script Infrastructure
+
+Edit the `common.sh` file to point to your current virtual environment:
+
+```bash
+readonly VENV_PATH=/cluster/home/<username>/myenv
+```
+
+Replace `<username>` with your cluster username.
+
+---
+
+## ▶️ 3. Running Scripts
+
+All commands must be executed **from the base `gluefactory` folder**.
+
+### 📂 Check Scratch Folder Usage
+```bash
+sbatch ./jpl_scripts/eval_disk_usage.sh
+```
+
+### 🏋️ Train a Model
+```bash
+python3 ./jpl_scripts/oxparis100k_train.sh ./gluefactory/config/train_jpl_oxparis_base.yaml
+```
+
+### 📊 Evaluate JPL on Points
+```bash
+sbatch ./jpl_scripts/eval_points.sh
+python3 report_points.py
+```
+
+### 📊 Evaluate JPL on Lines
+```bash
+sbatch ./jpl_scripts/eval_lines.sh
+python3 report_lines.py
+```
+
+---
+
+## ✅ Quick Checklist
+
+- [ ] Virtual environment created and activated  
+- [ ] Codebase installed (`pip install -e .` + `./install.sh`)  
+- [ ] `VENV_PATH` correctly set in `common.sh`  
+- [ ] Commands run from **gluefactory root folder**  
+
+---
+
+📌 You are now ready to train and evaluate models with JPL!
 # Glue Factory
 Glue Factory is CVG's library for training and evaluating deep neural network that extract and match local visual feature. It enables you to:
 - Reproduce the training of state-of-the-art models for point and line matching, like [LightGlue](https://github.com/cvg/LightGlue) and [GlueStick](https://github.com/cvg/GlueStick) (ICCV 2023)
