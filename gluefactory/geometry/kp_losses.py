@@ -413,7 +413,7 @@ def soft_argmax_only_loss(scores, scores_w, keypoints, valid_kp, H, radius, max_
     keypoints_rd = torch.round(keypoints)[:, :, [1, 0]].long()
 
     # Reproject points to the other image and keep only shared points
-    kp_w = warp_points(keypoints[:, :, [1, 0]].float(), H)
+    kp_w = warp_points(keypoints[:, :, [1, 0]].float(), H, eps)
     valid = (
         (kp_w[:, :, 0] >= 0)
         & (kp_w[:, :, 0] <= h - 1)

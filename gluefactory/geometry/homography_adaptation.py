@@ -126,19 +126,82 @@ def torch_homography_adaptation(
     return df, angle, offset
 
 
-def warp_points(points, H):
-    """Warp batched 2D points by a batched homography H:
-    points is [bs, ..., 2] and H is [bs, 3, 3]."""
-    shape = points.shape
-    bs = len(points)
+def warp_points(points: torch.Tensor, H: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Warp batched 2D points using a batched homography H.
+    Apply checks for NaNs and Infs before and after the warping.
+
+    Args:
+        points: Tensor of shape [bs, ..., 2]  (input 2D points)
+        H: Tensor of shape [bs, 3, 3]        (batched homographies)
+        eps: Small value to avoid division by zero in homogeneous normalization.
+
+    Returns:
+        Tensor of warped points, same shape as input `points`.
+    """
+
+    # Shape checks
+    if points.ndim < 2 or points.shape[-1] != 2:
+        raise ValueError(
+            f"warp_points: Expected points of shape [bs, ..., 2], but got {points.shape}"
+        )
+
+    if H.ndim != 3 or H.shape[-2:] != (3, 3):
+        raise ValueError(
+            f"warp_points: Expected H of shape [bs, 3, 3], but got {H.shape}"
+        )
+
+    bs = points.shape[0]
+    if H.shape[0] != bs:
+        raise ValueError(
+            f"warp_points: Batch size mismatch. points={bs}, H={H.shape[0]}"
+        )
+
+    # NaN / Inf checks BEFORE processing
+    if torch.isnan(points).any() or torch.isinf(points).any():
+        raise RuntimeError("warp_points: Input points contain NaN or Inf values!")
+
+    if torch.isnan(H).any() or torch.isinf(H).any():
+        raise RuntimeError("warp_points: Homography matrix contains NaN or Inf values!")
+
+    # Reshape points for homogeneous coordinates
+    shape = points.shape  # Store original shape for restoring later
     reproj_points = points.reshape(bs, -1, 2)[:, :, [1, 0]].transpose(1, 2)
+
+    # Append homogeneous coordinate
     reproj_points = torch.cat(
         [reproj_points, torch.ones_like(reproj_points[:, :1])], dim=1
     )
+
+    # Apply homography
     reproj_points = (H @ reproj_points).transpose(1, 2)
-    reproj_points = reproj_points[..., :2] / reproj_points[..., 2:]
+
+    # Check for invalid homogeneous coordinates BEFORE division
+    w = reproj_points[..., 2:]
+    if torch.isnan(w).any() or torch.isinf(w).any():
+        raise RuntimeError("warp_points: Homogeneous coordinate w contains NaN or Inf!")
+
+    # Detect extremely small denominators → dangerous for division
+    too_small = torch.abs(w) < eps
+    if too_small.any():
+        raise RuntimeError(
+            "warp_points: Homogeneous coordinate w is too small! (< eps), which will lead to zero division"
+        )
+        #w = torch.where(too_small, w.sign() * eps, w)
+
+    # Normalize homogeneous coordinates
+    reproj_points = reproj_points[..., :2] / w
+
+    # Check for NaNs / Infs after division
+    if torch.isnan(reproj_points).any() or torch.isinf(reproj_points).any():
+        raise RuntimeError(
+            "warp_points: NaN or Inf detected after dividing by homogeneous coordinate w!"
+        )
+
+    # Restore [y, x] → [x, y] convention and original shape
     reproj_points = reproj_points[..., [1, 0]]
     return reproj_points.reshape(shape)
+
 
 
 def warp_afm(df, angle, offset, H):
