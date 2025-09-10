@@ -408,31 +408,87 @@ def kp_ce_loss_indep(logits, gt_kp, valid_kp, valid_mask=None):
 
 
 def soft_argmax_only_loss(scores, scores_w, keypoints, valid_kp, H, radius, max_dist=8):
-    _, h, w = scores.shape
+    """
+    Computes soft-argmax loss between predicted and warped keypoints.
+    Now with:
+      • Safe clamping for keypoints and warped keypoints
+      • NaN / Inf checks
+      • Warnings if clamping was needed
+    """
     eps = 1e-8
-    keypoints_rd = torch.round(keypoints)[:, :, [1, 0]].long()
+    B, H_map, W_map = scores.shape  # assume scores: [B, H, W]
 
-    # Reproject points to the other image and keep only shared points
-    kp_w = warp_points(keypoints[:, :, [1, 0]].float(), H, eps)
+    # --- Step 1: Check for NaNs or Infs in keypoints
+    if torch.isnan(keypoints).any() or torch.isinf(keypoints).any():
+        raise RuntimeError("[soft_argmax_only_loss] Found NaN/Inf in keypoints!")
+
+    # --- Step 2: Round keypoints and reorder to [y, x]
+    keypoints_rd = torch.round(keypoints)[:, :, [1, 0]].long()  # [B, N, 2] -> (y,x)
+
+    # --- Step 3: Clamp keypoints to valid image range
+    keypoints_before = keypoints_rd.clone()
+    keypoints_rd[..., 0] = keypoints_rd[..., 0].clamp(0, H_map - 1)
+    keypoints_rd[..., 1] = keypoints_rd[..., 1].clamp(0, W_map - 1)
+
+    # Warn if clamping happened
+    if not torch.equal(keypoints_rd, keypoints_before):
+        print(
+            "[WARN] Clamped some rounded keypoints to valid range "
+            f"[0, {H_map-1}]x[0, {W_map-1}]"
+        )
+
+    # --- Step 4: Warp keypoints to the other image
+    kp_w = warp_points(keypoints[:, :, [1, 0]].float(), H)  # warp original float keypoints
+
+    # --- Step 5: Check for NaNs/Infs in warped keypoints
+    if torch.isnan(kp_w).any() or torch.isinf(kp_w).any():
+        raise RuntimeError("[soft_argmax_only_loss] Found NaN/Inf in warped keypoints!")
+
+    # --- Step 6: Compute valid mask for warped keypoints
     valid = (
         (kp_w[:, :, 0] >= 0)
-        & (kp_w[:, :, 0] <= h - 1)
+        & (kp_w[:, :, 0] <= H_map - 1)
         & (kp_w[:, :, 1] >= 0)
-        & (kp_w[:, :, 1] <= w - 1)
+        & (kp_w[:, :, 1] <= W_map - 1)
     )
-    keypoints_rd_w = torch.round(kp_w).long()
-    keypoints_rd_w[~valid] = 0
-    valid = valid.float() * valid_kp  # shape [B, n_kp]
 
-    # Location loss
-    pred_kp = torch.stack(soft_argmax_refinement(keypoints_rd, scores, radius), dim=0)
-    warped_pred_kp = warp_points(pred_kp, H)
+    # --- Step 7: Round and clamp warped keypoints
+    keypoints_rd_w = torch.round(kp_w).long()
+    keypoints_w_before = keypoints_rd_w.clone()
+    keypoints_rd_w[..., 0] = keypoints_rd_w[..., 0].clamp(0, H_map - 1)
+    keypoints_rd_w[..., 1] = keypoints_rd_w[..., 1].clamp(0, W_map - 1)
+
+    # Warn if warped keypoints had to be clamped
+    if not torch.equal(keypoints_rd_w, keypoints_w_before):
+        print(
+            "[WARN] Clamped some warped rounded keypoints to valid range "
+            f"[0, {H_map-1}]x[0, {W_map-1}]"
+        )
+
+    # Mark invalid warped keypoints as (0,0) for safety, even after clamping
+    keypoints_rd_w[~valid] = 0
+    valid = valid.float() * valid_kp  # shape [B, N]
+
+    # --- Step 8: Location loss
+    pred_kp = torch.stack(
+        soft_argmax_refinement(keypoints_rd, scores, radius), dim=0
+    )  # [B, N, 2]
+
+    warped_pred_kp = warp_points(pred_kp, H)  # warp predicted keypoints
+
     pred_kp_w = torch.stack(
         soft_argmax_refinement(keypoints_rd_w, scores_w, radius), dim=0
-    )
+    )  # [B, N, 2]
+
+    # Distance between warped predicted and predicted warped
     dist = torch.norm(warped_pred_kp - pred_kp_w, dim=2)
-    valid = valid * (dist < max_dist).float()  # Ignore faraway kp
+
+    # Ignore faraway keypoints
+    valid = valid * (dist < max_dist).float()
+
+    # Final location loss per batch
     loc_loss = (dist * valid).sum(dim=1) / (valid.sum(dim=1) + eps)
+
     return loc_loss
 
 
