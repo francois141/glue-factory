@@ -338,13 +338,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.freeze_lines:
             self.distance_field_branch.eval()
             with torch.no_grad():
-                line_distance_field = self.denormalize_df(
-                    self.distance_field_branch(feature_map)
-                )  # denormalize as NN outputs normalized version
+                raw_df = self.distance_field_branch(feature_map)
         else:
-            line_distance_field = self.denormalize_df(
-                self.distance_field_branch(feature_map)
-            )  # denormalize as NN outputs normalized version
+            raw_df = self.distance_field_branch(feature_map)
+
+        # denormalize as NN outputs normalized version
+        line_distance_field = self.denormalize_df(raw_df)
         # remove additional dimensions of size 1 if not having batchsize one
         line_distance_field = (
             line_distance_field.squeeze(1)
@@ -545,20 +544,22 @@ class JointPointLineDetectorDescriptor(BaseModel):
             # Two Way sparse NRE computation
 
             # best match in kp of A - for each kp projected from B to A
-            matches_B_to_A = compute_matches(
-                prediction_dict["keypoints"],
-                prediction_dict["keypoints1"],
-                H,
-                best_match_only=True,
-            )
+            with torch.no_grad():
+                # best match in kp of A - for each kp projected from B to A
+                matches_B_to_A = compute_matches(
+                    prediction_dict["keypoints"],
+                    prediction_dict["keypoints1"],
+                    H,
+                    best_match_only=True,
+                )
 
-            # best match in kp of B - for each kp projected from A to B
-            matches_A_to_B = compute_matches(
-                prediction_dict["keypoints1"],
-                prediction_dict["keypoints"],
-                H_inv,
-                best_match_only=True,
-            )
+                # best match in kp of B - for each kp projected from A to B
+                matches_A_to_B = compute_matches(
+                    prediction_dict["keypoints1"],
+                    prediction_dict["keypoints"],
+                    H_inv,
+                    best_match_only=True,
+                )
 
             # returns overall mean scalar, need to repeat on batch dim for total loss.
             keypoint_descriptor_lossBA = sparse_nre_loss(
