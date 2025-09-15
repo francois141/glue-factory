@@ -53,6 +53,8 @@ run_eval "./gluefactory/configs/eval/sift+NN.yaml"
 run_eval "./gluefactory/configs/eval/dedode+NN.yaml"
 run_eval "./gluefactory/configs/eval/dad+NN.yaml"
 run_eval "./gluefactory/configs/eval/xfeat+NN.yaml"
+run_eval "./gluefactory/configs/eval/suarez+NN_points_evaluation.yaml"
+
 # ROMA evaluation
 run_eval "./gluefactory/configs/eval/jpl+ROMA_points_evaluation.yaml"
 run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml"

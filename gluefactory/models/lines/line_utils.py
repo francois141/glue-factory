@@ -279,7 +279,7 @@ def align_with_grad_angle(angle, img):
     """Starting from an angle in [0, pi], find the sign of the angle based on
     the image gradient of the corresponding pixel."""
     # Image gradient
-    img_grad_angle = compute_image_grad(img)[3]
+    img_grad_angle = compute_image_grad(torch.tensor(img))
 
     # Compute the distance of the image gradient to the angle
     # and angle - pi
