@@ -14,6 +14,7 @@ packages=(
     "other/dad"
     "other/points_lsd"
     "other/DeDoDe"
+    "other/wireframe-detector"
 )
 
 for dir in "${packages[@]}"; do
