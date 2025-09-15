@@ -66,7 +66,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     # focal loss parameter controlling how strong to focus on hard examples (typical range 1-5)
                     "focal_alpha": 0.25,  # focal loss parameter to mitigate class imbalances
                 },
-                "refinement_radius": 5,  # radius for softargmax loss
                 "loss_weights": {
                     "one_view_line_df_weight": 1,
                     "two_view_line_df_weight": 1,
@@ -655,7 +654,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # soft argmax loss (Only applicable with two-view pipeline)
         if (
             self.conf.training.two_view
-            and self.conf.training.loss.refinement_radius > 0
             and self.conf.training.loss.loss_weights.softargmax_weight > 0
         ):
             loc_loss = soft_argmax_only_loss(
@@ -664,7 +662,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 prediction_dict["keypoints"],
                 prediction_dict["keypoint_scores"] > 0,
                 H,
-                self.conf.training.loss.refinement_radius,
+                self.conf.nms_radius,
             )
             losses["soft_argmax_kp_loss"] = loc_loss
             losses["total"] += (
