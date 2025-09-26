@@ -1,4 +1,6 @@
 """
+Adapted From:
+
     "XFeat: Accelerated Features for Lightweight Image Matching, CVPR 2024."
     https://www.verlab.dcc.ufmg.br/descriptors/xfeat_cvpr24/
 
@@ -17,6 +19,9 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import subprocess
+import gdown
+import tarfile
 
 from gluefactory.models import get_model
 from gluefactory.settings import DATA_PATH
@@ -139,10 +144,37 @@ def get_relative_transform(pose0, pose1):
     return T_0to1
 
 
+def download_scannet_1500(download_dir):
+    files = {
+        'test_images': 'https://drive.google.com/uc?id=1wtl-mNicxGlXZ-UQJxFnKuWPvvssQBwd',
+        'gt_poses': 'https://github.com/zju3dv/LoFTR/raw/refs/heads/master/assets/scannet_test_1500/test.npz',
+    }
+
+    os.makedirs(download_dir, exist_ok=True)
+
+    # Download Google Drive files with gdown
+    for file_name, url in files.items():
+        if 'drive.google.com' in url:
+            output_path = os.path.join(download_dir, f'{file_name}.tar')
+            gdown.download(url, output_path, quiet=False)
+
+            # Extract the tar.gz file
+            if tarfile.is_tarfile(output_path):
+                print(f"Extracting {output_path}...")
+                with tarfile.open(output_path, 'r:tar') as tar:
+                    tar.extractall(path=download_dir)
+
+                os.remove(output_path)
+        elif 'github.com' in url:
+            fname = url.split('/')[-1]
+            output_path = os.path.join(download_dir, fname)
+            subprocess.run(['wget', '-c', url, '-O', output_path])
+
+
 class Scannet1500:
     default_config = {
         "scannet_path": os.path.join(
-            DATA_PATH, "Scannet-Xfeat/ScanNet1500/scannet_test_1500"
+            DATA_PATH, "Scannet-Xfeat"
         ),
         "gt_path": os.path.join(DATA_PATH, "Scannet-Xfeat/ScanNet1500/test.npz"),
         "pose_estimator": "poselib",  # poselib, opencv
@@ -170,10 +202,8 @@ class Scannet1500:
     def __init__(self, config={}) -> None:
         self.config = {**self.default_config, **config}
         if not os.path.exists(self.config["scannet_path"]):
-            raise RuntimeError(
-                f"Dataset {self.config['scannet_path']} does not exist! \n \
-                  > If you didn't download the dataset, use the downloader tool: python3 -m modules.dataset.download -h"
-            )
+            print(f"Dataset {self.config['scannet_path']} does not exist! \n Attempt to download...")
+            download_scannet_1500(self.config["scannet_path"])
 
         self.pairs = self.read_gt()
 
