@@ -184,20 +184,16 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         # Initialize Lightweight ALIKED model to perform on-the-fly ground-truth generation for descriptors if training in one-view setting
         if conf.training.do and conf.training.train_descriptors.use_one_view_loss:
-            if "aliked" not in self.conf.training.train_descriptors.gt_aliked_model:
-                logger.warning("Load DeDoDe model for descriptor training...")
-                self.descriptor_gt = DeDoDeDetector({})
-            else:
-                logger.warning("Load ALiked Lightweight model for descriptor training...")
-                aliked_gt_cfg = {
-                    "model_name": self.conf.training.train_descriptors.gt_aliked_model,
-                    "max_num_keypoints": self.conf.max_num_keypoints,
-                    "detection_threshold": self.conf.detection_threshold,
-                    "force_num_keypoints": False,
-                    "pretrained": True,
-                    "nms_radius": self.conf.nms_radius,
-                }
-                self.aliked_lw = get_model("extractors.aliked_light")(aliked_gt_cfg).eval()
+            logger.warning("Load ALiked Lightweight model for descriptor training...")
+            aliked_gt_cfg = {
+                "model_name": self.conf.training.train_descriptors.gt_aliked_model,
+                "max_num_keypoints": self.conf.max_num_keypoints,
+                "detection_threshold": self.conf.detection_threshold,
+                "force_num_keypoints": False,
+                "pretrained": True,
+                "nms_radius": self.conf.nms_radius,
+            }
+            self.aliked_lw = get_model("extractors.aliked_light")(aliked_gt_cfg).eval()
 
         # load model checkpoint if given -> only load weights
         if conf.checkpoint is not None:
@@ -770,13 +766,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
             and pred.get("keypoints", None) is not None
         )
 
-        if "aliked" in self.conf.training.train_descriptors.gt_aliked_model:
-            with torch.no_grad():
-                descriptors = self.aliked_lw(pred)
-        else:
-            with torch.no_grad():
-                descriptors = {}
-                descriptors["aliked_descriptors"] = self.descriptor_gt({"image": pred["image"]}, pred["keypoints"])
+        with torch.no_grad():
+            descriptors = self.aliked_lw(pred)
 
         return descriptors
 
