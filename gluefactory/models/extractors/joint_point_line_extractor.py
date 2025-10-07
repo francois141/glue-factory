@@ -70,6 +70,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     "one_view_line_df_weight": 1,
                     "two_view_line_df_weight": 1,
                     "keypoint_weight": 1,
+                    "keypoint_dispersity_weight": 1,
                     "one_view_descriptor_weight": 1,
                     "two_view_descriptor_weight": 1,
                     "softargmax_weight": 1,  # if > 0 activates calculation of soft argmax loss on keypoint detection. Only used if two_view activated
@@ -348,7 +349,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         output["line_distancefield"] = line_distance_field
 
         # Keypoint detection also removes kp at border. it can return topk keypoints or set of thresholded kp.
-        keypoints, _, kptscores = self.dkd(
+        keypoints, kptscores, kpt_dispersity = self.dkd(
             keypoint_and_junction_score_map,
             sub_pixel=bool(self.conf.subpixel_refinement),
         )
@@ -367,6 +368,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         rescaled_kp = wh * (torch.stack(keypoints) + 1.0) / 2.0
         output["keypoints"] = rescaled_kp
         output["keypoint_scores"] = torch.stack(kptscores)
+        output["keypoint_dispersity"] = torch.stack(kpt_dispersity)
 
         # Keypoint descriptors
         if self.conf.descriptor_branch == "aliked":
@@ -506,6 +508,15 @@ class JointPointLineDetectorDescriptor(BaseModel):
             losses["total"] += (
                 self.conf.training.loss.loss_weights.keypoint_weight
                 * keypoint_scoremap_loss
+            )
+
+        # keypoint dispersity loss
+        if self.conf.training.loss.loss_weights.keypoint_dispersity_weight > 0:
+            dispers_loss = pred["keypoint_dispersity"].mean(dim=(1, 2))
+            losses["one_view_kp_dispersity"] = dispers_loss
+            losses["total"] = (
+                self.conf.training.loss.loss_weights.keypoint_dispersity_weight
+                * dispers_loss
             )
 
         # If training descriptors: decide between one-view and two-view node

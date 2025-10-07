@@ -57,6 +57,7 @@ model:
             loss_weights:
                 one_view_line_df_weight: 1
                 keypoint_weight: 1
+                keypoint_dispersity_weight: 0
                 one_view_descriptor_weight: 1
     line_detection:
       do: False
