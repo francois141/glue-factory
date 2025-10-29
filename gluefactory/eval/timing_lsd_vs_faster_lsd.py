@@ -6,14 +6,14 @@ Attention: Make sure you configure batch_size and dataset split correctly.
 """
 
 import argparse
-import time
 import math
+import time
+from itertools import islice
 
 import numpy as np
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from itertools import islice
 
 from gluefactory.datasets import get_dataset
 from gluefactory.models import get_model

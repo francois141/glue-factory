@@ -8,10 +8,11 @@ from types import SimpleNamespace
 
 import torch
 
-from gluefactory.models.lines.deeplsd import DeepLSD
 from gluefactory.models.extractors.aliked import ALIKED
+from gluefactory.models.lines.deeplsd import DeepLSD
 
 from ..base_model import BaseModel
+
 
 class AlikedDeepLSD(BaseModel):
     default_conf = {}
@@ -21,11 +22,13 @@ class AlikedDeepLSD(BaseModel):
 
     def _init(self, conf):
         self.deeplsd = DeepLSD({}).eval()
-        self.aliked = ALIKED({
-            "max_num_keypoints": 1024,
-            "detection_threshold": 0, 
-            "force_num_keypoints": True
-        }).eval()
+        self.aliked = ALIKED(
+            {
+                "max_num_keypoints": 1024,
+                "detection_threshold": 0,
+                "force_num_keypoints": True,
+            }
+        ).eval()
 
     def _forward(self, data):
         with torch.no_grad():

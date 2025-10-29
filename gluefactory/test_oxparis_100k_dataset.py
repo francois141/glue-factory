@@ -13,18 +13,15 @@ from collections import defaultdict
 from pathlib import Path
 from pydoc import locate
 
+import flow_vis
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from omegaconf import OmegaConf
+from scipy.ndimage import binary_dilation
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
-import torch
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.ndimage import binary_dilation
-import flow_vis
 
 from . import __module_name__, logger
 from .datasets import get_dataset
@@ -43,8 +40,10 @@ from .utils.tools import (
     set_seed,
 )
 
+
 def nicer_display(df):
-    return (df) ** (1/4)
+    return (df) ** (1 / 4)
+
 
 def get_flow_vis(df, ang, line_neighborhood=5):
     norm = line_neighborhood + 1 - np.clip(df, 0, line_neighborhood)
@@ -52,9 +51,10 @@ def get_flow_vis(df, ang, line_neighborhood=5):
     flow_img = flow_vis.flow_to_color(flow_uv, convert_to_bgr=False)
     return flow_img
 
+
 def visualize_img_with_gt(name, dset, num=5, offset=0, lim_kpoints=-1):
     plt.figure()
-    idxs = list(range(offset, offset+num, 1))
+    idxs = list(range(offset, offset + num, 1))
     _, ax = plt.subplots(1, 4, figsize=(20, 8))
     for i in idxs:
         if i >= 1:
@@ -65,29 +65,30 @@ def visualize_img_with_gt(name, dset, num=5, offset=0, lim_kpoints=-1):
         df = elem["deeplsd_distance_field"]
         af = elem["deeplsd_angle_field"]
 
-        ax[0].axis('off')
-        ax[0].set_title(f'Heatmap ({hmap.shape})')
+        ax[0].axis("off")
+        ax[0].set_title(f"Heatmap ({hmap.shape})")
         ax[0].imshow(hmap)
 
-        ax[1].axis('off')
-        ax[1].set_title('Distance Field')
+        ax[1].axis("off")
+        ax[1].set_title("Distance Field")
         ax[1].imshow(df)
 
-        ax[2].axis('off')
-        ax[2].set_title('Angle Field')
+        ax[2].axis("off")
+        ax[2].set_title("Angle Field")
         ax[2].imshow(get_flow_vis(df, af))
 
-        ax[3].axis('off')
-        ax[3].set_title('Original')
-        ax[3].imshow(elem["image"].permute(1,2,0))
+        ax[3].axis("off")
+        ax[3].set_title("Original")
+        ax[3].imshow(elem["image"].permute(1, 2, 0))
 
     plt.savefig(f"test_{name}.png")
     plt.show()
     plt.close()
 
+
 # Command to launch it
-# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_100k.yaml 
-# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_base.yaml 
+# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_100k.yaml
+# python -m gluefactory.test_oxparis_100k_dataset --conf gluefactory/configs/train_jpl_oxparis_base.yaml
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf", type=str, default=None)

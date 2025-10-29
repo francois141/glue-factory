@@ -13,15 +13,15 @@ import argparse
 import json
 import multiprocessing as mp
 import os
+import subprocess
+import tarfile
 
 import cv2
+import gdown
 import numpy as np
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
-import subprocess
-import gdown
-import tarfile
 
 from gluefactory.models import get_model
 from gluefactory.settings import DATA_PATH

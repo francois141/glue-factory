@@ -8,12 +8,12 @@ import argparse
 from pathlib import Path
 
 import cv2
-import torch
 import matplotlib.pyplot as plt
+import torch
 from omegaconf import OmegaConf
 
+from gluefactory.eval.io import get_model, load_model
 from gluefactory.visualization.viz2d import plot_images, plot_lines
-from gluefactory.eval.io import load_model, get_model
 
 
 def visualize_img_with_gt(output, input_image, save_path):
@@ -31,53 +31,58 @@ def visualize_img_with_gt(output, input_image, save_path):
 def get_jpl_model():
     return load_model(
         {
-            'name': 'extractors.joint_point_line_extractor',
-            'line_df_decoder_channels': 64,
-            'training': {'do': False},
-            'max_num_keypoints': 2048,
-            'line_detection': {'do': True, 'conf': {'lsd_type': 'old', 'sigma': 0.9}},
-            'checkpoint': 'assets/jpl_best.tar'
+            "name": "extractors.joint_point_line_extractor",
+            "line_df_decoder_channels": 64,
+            "training": {"do": False},
+            "max_num_keypoints": 2048,
+            "line_detection": {"do": True, "conf": {"lsd_type": "old", "sigma": 0.9}},
+            "checkpoint": "assets/jpl_best.tar",
         },
-        "./assets/jpl_best_with_points.tar"
+        "./assets/jpl_best_with_points.tar",
     ).to("cpu")
 
+
 def get_scalelsd_model():
-    return get_model('lines.scalelsd')({
-        'name': 'lines.scalelsd',
-        'threshold': 10
-    }).to("cpu")
+    return get_model("lines.scalelsd")({"name": "lines.scalelsd", "threshold": 10}).to(
+        "cpu"
+    )
+
 
 def get_wireframe_model():
-    return get_model('lines.wireframe_suarez')({
-        'name': 'lines.wireframe_suarez'
-    }).to("cpu")
+    return get_model("lines.wireframe_suarez")({"name": "lines.wireframe_suarez"}).to(
+        "cpu"
+    )
+
 
 def get_deeplsd_model():
-    return get_model('lines.deeplsd')({
-        'name': 'lines.deeplsd',
-       ' model_conf':
-            {'detect_lines': True,
-                    'line_detection_params': {
-                        'use_img_grad_angle': False,
-                        'merge': False,
-                        'grad_nfa': True,
-                        'filtering': True,
-                        'faster_lsd': False,
-                    }
-            }
-    }).to("cpu")
+    return get_model("lines.deeplsd")(
+        {
+            "name": "lines.deeplsd",
+            " model_conf": {
+                "detect_lines": True,
+                "line_detection_params": {
+                    "use_img_grad_angle": False,
+                    "merge": False,
+                    "grad_nfa": True,
+                    "filtering": True,
+                    "faster_lsd": False,
+                },
+            },
+        }
+    ).to("cpu")
+
 
 def get_lsd_model():
-    return get_model('lines.lsd')({
-        'name': 'lines.lsd'
-    }).to("cpu")
+    return get_model("lines.lsd")({"name": "lines.lsd"}).to("cpu")
+
 
 # Command to run it: python -m gluefactory.generate_visualisation_paper
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image", type=str, default="assets/boat1.png", help="Path to input image")
+    parser.add_argument(
+        "--image", type=str, default="assets/boat1.png", help="Path to input image"
+    )
     args = parser.parse_args()
-
 
     # Load model
     print("Loading model...")
@@ -111,5 +116,3 @@ if __name__ == "__main__":
         path = f"generated_jpl_images/example_{name}.pdf"
         print("Visualization saved to {}".format(path))
         visualize_img_with_gt(output, img_rgb, path)
-
-

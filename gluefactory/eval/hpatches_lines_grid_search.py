@@ -1,3 +1,5 @@
+import copy
+import itertools
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -10,8 +12,6 @@ import torch.utils
 import torch.utils.data
 from omegaconf import OmegaConf
 from tqdm import tqdm
-import itertools
-import copy
 
 from gluefactory.datasets import get_dataset
 from gluefactory.datasets.homographies_deeplsd import warp_lines

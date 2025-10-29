@@ -5,6 +5,8 @@
 3) Optionally: save a .png or .pdf plot (nice in papers!) with `save_plot`.
 """
 
+import os
+
 import cv2
 import matplotlib
 import matplotlib.patheffects as path_effects
@@ -12,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import torch
-import os
 
 
 def cm_ranking(sc, ths=[512, 1024, 2048, 4096]):

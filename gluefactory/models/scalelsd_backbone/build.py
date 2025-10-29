@@ -1,17 +1,19 @@
 from .dpt.models import DPTFieldModel
 
+
 def build_dpt(
-    basemodel = "vitb_rn50_384",
+    basemodel="vitb_rn50_384",
     features=256,
-    readout = "project",
-    channels_last = False,
-    use_bn = True,
-    enable_attention_hooks = False,
-    head_size = [[3],[1],[1],[2],[2]],
-    use_layer_scale = False,
-    upsample = False,
-    **kwargs):
-    
+    readout="project",
+    channels_last=False,
+    use_bn=True,
+    enable_attention_hooks=False,
+    head_size=[[3], [1], [1], [2], [2]],
+    use_layer_scale=False,
+    upsample=False,
+    **kwargs,
+):
+
     model = DPTFieldModel(
         features=features,
         backbone=basemodel,
@@ -25,6 +27,7 @@ def build_dpt(
     )
 
     return model
-    
+
+
 def build_backbone(**kwargs):
     return build_dpt(**kwargs)

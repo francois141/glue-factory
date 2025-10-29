@@ -1,6 +1,7 @@
-import torch
 import numpy as np
+import torch
 from torch.utils.data.dataloader import default_collate
+
 
 class HAFMencoder(object):
     def __init__(self, dis_th=10, ang_th=0):
@@ -10,14 +11,16 @@ class HAFMencoder(object):
     def __call__(self, annotations):
         targets = []
         metas = []
-        batch_size = annotations['batch_size']
-        stride = annotations['stride']
+        batch_size = annotations["batch_size"]
+        stride = annotations["stride"]
         for batch_id in range(batch_size):
-            junctions = annotations['junctions'][batch_id].clone()[:, [1, 0]] / float(stride)
+            junctions = annotations["junctions"][batch_id].clone()[:, [1, 0]] / float(
+                stride
+            )
 
-            width = annotations['width'] // stride
-            height = annotations['height'] // stride
-            edge_indices = annotations['line_map'][batch_id].triu().nonzero()
+            width = annotations["width"] // stride
+            height = annotations["height"] // stride
+            edge_indices = annotations["line_map"][batch_id].triu().nonzero()
 
             t, m = self.encoding_single_image(junctions, edge_indices, height, width)
 
@@ -39,9 +42,11 @@ class HAFMencoder(object):
             hafm_ang = torch.zeros((3, height, width), device=device)
             hafm_dis = torch.zeros((1, height, width), device=device)
             hafm_mask = torch.zeros((1, height, width), device=device)
-            return torch.zeros((3, height, width), device=device), torch.zeros((1, height, width),
-                                                                               device=device), torch.zeros(
-                (1, height, width), device=device)
+            return (
+                torch.zeros((3, height, width), device=device),
+                torch.zeros((1, height, width), device=device),
+                torch.zeros((1, height, width), device=device),
+            )
 
         lmap, _, _ = _C.encodels(lines, height, width, height, width, lines.size(0))
         dismap = torch.sqrt(lmap[0] ** 2 + lmap[1] ** 2)[None]
@@ -60,11 +65,19 @@ class HAFMencoder(object):
         st_ = st_map.reshape(2, -1).t()
         ed_ = ed_map.reshape(2, -1).t()
         Rt = torch.cat(
-            (torch.cat((md_[:, None, None, 0], md_[:, None, None, 1]), dim=2),
-             torch.cat((-md_[:, None, None, 1], md_[:, None, None, 0]), dim=2)), dim=1)
+            (
+                torch.cat((md_[:, None, None, 0], md_[:, None, None, 1]), dim=2),
+                torch.cat((-md_[:, None, None, 1], md_[:, None, None, 0]), dim=2),
+            ),
+            dim=1,
+        )
         R = torch.cat(
-            (torch.cat((md_[:, None, None, 0], -md_[:, None, None, 1]), dim=2),
-             torch.cat((md_[:, None, None, 1], md_[:, None, None, 0]), dim=2)), dim=1)
+            (
+                torch.cat((md_[:, None, None, 0], -md_[:, None, None, 1]), dim=2),
+                torch.cat((md_[:, None, None, 1], md_[:, None, None, 0]), dim=2),
+            ),
+            dim=1,
+        )
         # Rtst_ = torch.matmul(Rt, st_[:,:,None]).squeeze(-1).t()
         # Rted_ = torch.matmul(Rt, ed_[:,:,None]).squeeze(-1).t()
         Rtst_ = torch.bmm(Rt, st_[:, :, None]).squeeze(-1).t()
@@ -90,15 +103,22 @@ class HAFMencoder(object):
         pos_angle = torch.atan2(pos_map[1], pos_map[0])
         neg_angle = torch.atan2(neg_map[1], neg_map[0])
 
-        mask *= (pos_angle.reshape(-1) > self.ang_th * np.pi / 2.0)
-        mask *= (neg_angle.reshape(-1) < -self.ang_th * np.pi / 2.0)
+        mask *= pos_angle.reshape(-1) > self.ang_th * np.pi / 2.0
+        mask *= neg_angle.reshape(-1) < -self.ang_th * np.pi / 2.0
 
         pos_angle_n = pos_angle / (np.pi / 2)
         neg_angle_n = -neg_angle / (np.pi / 2)
         md_angle_n = md_angle / (np.pi * 2) + 0.5
         mask = mask.reshape(height, width)
 
-        hafm_ang = torch.cat((md_angle_n[None], pos_angle_n[None], neg_angle_n[None],), dim=0)
+        hafm_ang = torch.cat(
+            (
+                md_angle_n[None],
+                pos_angle_n[None],
+                neg_angle_n[None],
+            ),
+            dim=0,
+        )
         hafm_dis = dismap.clamp(max=self.dis_th) / self.dis_th
         mask = mask[None]
         return hafm_ang, hafm_dis, mask
@@ -116,7 +136,9 @@ class HAFMencoder(object):
 
         if junctions.shape[0] > 0:
             junctions_np = junctions.cpu().numpy()
-            xint, yint = junctions_np[:, 0].astype(np.int32), junctions_np[:, 1].astype(np.int32)
+            xint, yint = junctions_np[:, 0].astype(np.int32), junctions_np[:, 1].astype(
+                np.int32
+            )
             off_x = junctions_np[:, 0] - np.floor(junctions_np[:, 0]) - 0.5
             off_y = junctions_np[:, 1] - np.floor(junctions_np[:, 1]) - 0.5
 
@@ -142,18 +164,18 @@ class HAFMencoder(object):
         hafm_ang, hafm_dis, hafm_mask = self.lines2hafm(lines, height, width)
 
         target = {
-            'jloc': jmap[None],
-            'joff': joff,
-            'md': hafm_ang,
-            'dis': hafm_dis,
-            'mask': hafm_mask
+            "jloc": jmap[None],
+            "joff": joff,
+            "md": hafm_ang,
+            "dis": hafm_dis,
+            "mask": hafm_mask,
         }
 
         meta = {
-            'junc': junctions,
-            'lines': lines,
-            'Lpos': pos_mat,
-            'lpre': lines,
-            'lpre_label': labels
+            "junc": junctions,
+            "lines": lines,
+            "Lpos": pos_mat,
+            "lpre": lines,
+            "lpre_label": labels,
         }
         return target, meta

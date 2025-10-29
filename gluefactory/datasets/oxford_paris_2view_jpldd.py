@@ -119,10 +119,10 @@ class OxfordParisTwoViewDataset(BaseDataset):
             "check_exists": False,
             "point_gt": {
                 "force_num_keypoints": True,
-                "load_keypoints": False, # whether to load the keypoints as a list of keypoints besides using them for heatmap generation
+                "load_keypoints": False,  # whether to load the keypoints as a list of keypoints besides using them for heatmap generation
                 "use_score_heatmap": False,
-                "max_num_keypoints": 63, # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
-                "max_num_heatmap_keypoints": -1  # number of gt keypoints used to create heatmap. Set to -1 to use all
+                "max_num_keypoints": 63,  # how many gt keypoints are loaded (could be used for kp losses later on). Needed for batching.
+                "max_num_heatmap_keypoints": -1,  # number of gt keypoints used to create heatmap. Set to -1 to use all
             },
         },
     }
@@ -222,30 +222,28 @@ class _Dataset(torch.utils.data.Dataset):
     def _transform_keypoints(self, keypoints, keypoint_scores, data):
         """Transform keypoints by a homography, threshold them,
         and potentially keep only the best ones.
-    
+
         Args:
             keypoints: Tensor of keypoint coordinates
             keypoint_scores: Tensor of keypoint scores
             data: Dictionary containing image data and homography
-        
+
         Returns:
             tuple: (transformed_keypoints, transformed_scores)
         """
         # Warp points
-        keypoints = warp_points_torch(
-            keypoints, data["H_"], inverse=False
-        )
+        keypoints = warp_points_torch(keypoints, data["H_"], inverse=False)
         h, w = data["image"].shape[1:3]
         valid = (
-                (keypoints[:, 0] >= 0)
-                & (keypoints[:, 0] <= w - 1)
-                & (keypoints[:, 1] >= 0)
-                & (keypoints[:, 1] <= h - 1)
+            (keypoints[:, 0] >= 0)
+            & (keypoints[:, 0] <= w - 1)
+            & (keypoints[:, 1] >= 0)
+            & (keypoints[:, 1] <= h - 1)
         )
 
         keypoints = keypoints[valid]
         keypoint_scores = keypoint_scores[valid]
-    
+
         return keypoints, keypoint_scores
 
     def _warp_line_data(self, img, df, angle, offset, H, ps: list):
@@ -341,20 +339,24 @@ class _Dataset(torch.utils.data.Dataset):
                 dtype=torch.float32, device=data["image"].device
             )
 
-            keypoints, keypoint_scores = self._transform_keypoints(keypoints, keypoint_scores, data)
+            keypoints, keypoint_scores = self._transform_keypoints(
+                keypoints, keypoint_scores, data
+            )
 
             # Sort keypoints by score if needed
             point_cfg = self.conf.load_features.point_gt
-            if point_cfg.max_num_heatmap_keypoints > -1 or (point_cfg.max_num_keypoints > -1 and point_cfg.load_keypoints):
+            if point_cfg.max_num_heatmap_keypoints > -1 or (
+                point_cfg.max_num_keypoints > -1 and point_cfg.load_keypoints
+            ):
                 top_k_indices = torch.argsort(-keypoint_scores)
                 keypoints = keypoints[top_k_indices]
                 keypoint_scores = keypoint_scores[top_k_indices]
 
             # prepare keypoint heatmap
             heatmap = np.zeros_like(data["image"][0], dtype=np.float32)
-            integer_kp_coordinates = torch.round(keypoints[:point_cfg.max_num_heatmap_keypoints]).to(
-                dtype=torch.int
-            )
+            integer_kp_coordinates = torch.round(
+                keypoints[: point_cfg.max_num_heatmap_keypoints]
+            ).to(dtype=torch.int)
 
             if self.conf.load_features.point_gt.use_score_heatmap:
                 heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
@@ -364,7 +366,9 @@ class _Dataset(torch.utils.data.Dataset):
                 heatmap[integer_kp_coordinates[:, 1], integer_kp_coordinates[:, 0]] = (
                     1.0
                 )
-            features["superpoint_heatmap"] = torch.from_numpy(heatmap).to(dtype=torch.float32)
+            features["superpoint_heatmap"] = torch.from_numpy(heatmap).to(
+                dtype=torch.float32
+            )
 
             # load keypoints and scores if configured. Can be configured with 'load_keypoints'
             if self.conf.load_features.point_gt.load_keypoints:
@@ -375,7 +379,7 @@ class _Dataset(torch.utils.data.Dataset):
                 if self.conf.load_features.point_gt.force_num_keypoints:
                     padded = pad_local_features(
                         {"keypoints": keypoints, "keypoint_scores": keypoint_scores},
-                        self.conf.load_features.max_num_keypoints
+                        self.conf.load_features.max_num_keypoints,
                     )
                     keypoints = padded["keypoints"]
                     keypoint_scores = padded["keypoint_scores"]
@@ -408,8 +412,8 @@ class _Dataset(torch.utils.data.Dataset):
             offset = offset + values["min_offset"]
 
             # Warp the DF, and AF according to the homography
-            ref_valid_mask, warped_df, warped_angle, warped_offset = self._warp_line_data(
-                img, df_img, af_img, offset, H, ps
+            ref_valid_mask, warped_df, warped_angle, warped_offset = (
+                self._warp_line_data(img, df_img, af_img, offset, H, ps)
             )
 
             # Add the warped features to the dictionary
@@ -445,9 +449,16 @@ class _Dataset(torch.utils.data.Dataset):
         if self.conf.right_only:
             left_conf["difficulty"] = 0.0
 
-        data0 = self._read_view(img, img_folder_path, name, left_conf, homography_patch_shape, left=True)
+        data0 = self._read_view(
+            img, img_folder_path, name, left_conf, homography_patch_shape, left=True
+        )
         data1 = self._read_view(
-            img, img_folder_path, name, self.conf.homography, homography_patch_shape, left=False
+            img,
+            img_folder_path,
+            name,
+            self.conf.homography,
+            homography_patch_shape,
+            left=False,
         )
 
         H = compute_homography(data0["coords"], data1["coords"], [1, 1])

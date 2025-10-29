@@ -5,18 +5,17 @@ The code comes from: https://github.com/Parskatt/dad
 from collections import OrderedDict
 from pathlib import Path
 from types import SimpleNamespace
-from DeDoDe import dedode_detector_L, dedode_descriptor_B, dedode_descriptor_G
-from DeDoDe.matchers.dual_softmax_matcher import DualSoftMaxMatcher
 
-
+import dad
 import torch
 import torch.nn as nn
+from DeDoDe import dedode_descriptor_B, dedode_descriptor_G, dedode_detector_L
+from DeDoDe.matchers.dual_softmax_matcher import DualSoftMaxMatcher
+from PIL import Image
 
 from ..base_model import BaseModel
 from ..utils.misc import pad_and_stack
 
-import dad
-from PIL import Image
 
 class DeDoDeDetector(BaseModel):
     default_conf = {
@@ -28,10 +27,10 @@ class DeDoDeDetector(BaseModel):
 
     def _init(self, conf):
 
-        self.dedode_detector = dedode_detector_L(weights = None)
+        self.dedode_detector = dedode_detector_L(weights=None)
 
-        self.descriptor_lightweight = dedode_descriptor_B(weights = None)
-        #self.descriptor_heavyweight = dedode_descriptor_G(weights = None)
+        self.descriptor_lightweight = dedode_descriptor_B(weights=None)
+        # self.descriptor_heavyweight = dedode_descriptor_G(weights = None)
 
         self.max_num_keypoints = 1024
 
@@ -39,11 +38,17 @@ class DeDoDeDetector(BaseModel):
         with torch.no_grad():
             input_data = {"image": data["image"]}
 
-            detections = self.dedode_detector.detect(input_data, num_keypoints = self.max_num_keypoints)
+            detections = self.dedode_detector.detect(
+                input_data, num_keypoints=self.max_num_keypoints
+            )
 
-            mask = self.dedode_detector.detect_dense(input_data)["dense_keypoint_logits"]
+            mask = self.dedode_detector.detect_dense(input_data)[
+                "dense_keypoint_logits"
+            ]
 
-            descriptors = self.descriptor_lightweight.describe_keypoints(input_data, detections["keypoints"])["descriptions"]
+            descriptors = self.descriptor_lightweight.describe_keypoints(
+                input_data, detections["keypoints"]
+            )["descriptions"]
 
             _, _, image_height, image_width = data["image"].shape
             keypoints = detections["keypoints"]
@@ -58,10 +63,11 @@ class DeDoDeDetector(BaseModel):
                 "heatmap": mask,
                 "descriptors": descriptors,
             }
-        
-    def describe_keypoints(self, input_data, keypoints):
-        return self.descriptor_lightweight.describe_keypoints(input_data, keypoints)["descriptions"]
 
+    def describe_keypoints(self, input_data, keypoints):
+        return self.descriptor_lightweight.describe_keypoints(input_data, keypoints)[
+            "descriptions"
+        ]
 
     def loss(self, pred, data):
         raise NotImplementedError

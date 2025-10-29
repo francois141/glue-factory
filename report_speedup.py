@@ -1,6 +1,7 @@
 import os
 import re
 
+
 def parse_file(path):
     """Extract throughput, latency, and number of parameters from a file."""
     throughput, latency, params = None, None, None
@@ -24,6 +25,7 @@ def parse_file(path):
                     latency = parts[1].strip()
     return params, throughput, latency
 
+
 def main(folder="."):
     rows = []
     for fname in os.listdir(folder):
@@ -36,14 +38,16 @@ def main(folder="."):
         rows.append((fname, params, throughput, latency))
 
     # Generate markdown table
-    md_lines = ["| File | Parameters | Throughput (detections/s) | Latency (ms) |",
-                "|------|------------|--------------------------|--------------|"]
+    md_lines = [
+        "| File | Parameters | Throughput (detections/s) | Latency (ms) |",
+        "|------|------------|--------------------------|--------------|",
+    ]
     for fname, params, throughput, latency in rows:
         md_lines.append(
             f"| {fname} | {params or 'N/A'} | "
             f"{float(throughput):.3f} | {float(latency):.3f} |"
-            if throughput and latency else
-            f"| {fname} | {params or 'N/A'} | {throughput or 'N/A'} | {latency or 'N/A'} |"
+            if throughput and latency
+            else f"| {fname} | {params or 'N/A'} | {throughput or 'N/A'} | {latency or 'N/A'} |"
         )
 
     out_path = "result_speedup.md"
@@ -51,5 +55,6 @@ def main(folder="."):
         f.write("\n".join(md_lines))
     print(f"✅ Results written to {out_path}")
 
+
 if __name__ == "__main__":
-    main("jpl_scripts/eval/performance/")  
+    main("jpl_scripts/eval/performance/")

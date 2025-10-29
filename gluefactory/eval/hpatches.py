@@ -1,8 +1,8 @@
+import random
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 from pprint import pprint
-import random
 
 import matplotlib.pyplot as plt
 import numpy as np

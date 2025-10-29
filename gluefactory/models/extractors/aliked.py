@@ -98,10 +98,8 @@ class DKD(nn.Module):
         # local xy grid
         x = torch.linspace(-self.radius, self.radius, self.kernel_size)
         # (kernel_size*kernel_size) x 2 : (w,h)
-        #kw = {"indexing": "ij"} if torch.__version__ >= "1.10" else {}
-        self.hw_grid = (
-            torch.stack(torch.meshgrid([x, x])).view(2, -1).t()[:, [1, 0]]
-        )
+        # kw = {"indexing": "ij"} if torch.__version__ >= "1.10" else {}
+        self.hw_grid = torch.stack(torch.meshgrid([x, x])).view(2, -1).t()[:, [1, 0]]
 
     def forward(
         self,

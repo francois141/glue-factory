@@ -1,8 +1,9 @@
-
 from pathlib import Path
 
 import torch
+
 from gluefactory.geometry.homography import warp_points_torch
+
 
 def compute_matches(
     keypoints_imA: torch.Tensor,
@@ -55,7 +56,6 @@ def compute_matches(
         matches = torch.stack([batch_idx, idx_A, idx_B], dim=1)  # (M, 3)
 
     return matches  # (M, 3)
-
 
 
 def sparse_nre_loss(

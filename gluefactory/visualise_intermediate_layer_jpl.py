@@ -9,14 +9,16 @@ import copy
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 from omegaconf import OmegaConf
+from sklearn.decomposition import PCA
+
 from gluefactory.eval.io import load_model
+
 from .datasets import get_dataset
 
 
 def nicer_display(df):
-    return (df) ** (1/4)
+    return (df) ** (1 / 4)
 
 
 # Command:
@@ -39,7 +41,9 @@ if __name__ == "__main__":
 
     # Load model
     print("Loading model")
-    jpldd_model = load_model(conf.model.extractor, "./assets/jpl_best_with_points.tar").to("cpu")
+    jpldd_model = load_model(
+        conf.model.extractor, "./assets/jpl_best_with_points.tar"
+    ).to("cpu")
     jpldd_model.eval()
     print("Model loaded")
 

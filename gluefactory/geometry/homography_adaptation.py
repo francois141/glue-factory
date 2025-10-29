@@ -126,7 +126,9 @@ def torch_homography_adaptation(
     return df, angle, offset
 
 
-def warp_points(points: torch.Tensor, H: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+def warp_points(
+    points: torch.Tensor, H: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
     """
     Warp batched 2D points using a batched homography H.
     Apply checks for NaNs and Infs before and after the warping.
@@ -187,7 +189,7 @@ def warp_points(points: torch.Tensor, H: torch.Tensor, eps: float = 1e-8) -> tor
         raise RuntimeError(
             "warp_points: Homogeneous coordinate w is too small! (< eps), which will lead to zero division"
         )
-        #w = torch.where(too_small, w.sign() * eps, w)
+        # w = torch.where(too_small, w.sign() * eps, w)
 
     # Normalize homogeneous coordinates
     reproj_points = reproj_points[..., :2] / w
@@ -201,7 +203,6 @@ def warp_points(points: torch.Tensor, H: torch.Tensor, eps: float = 1e-8) -> tor
     # Restore [y, x] → [x, y] convention and original shape
     reproj_points = reproj_points[..., [1, 0]]
     return reproj_points.reshape(shape)
-
 
 
 def warp_afm(df, angle, offset, H):

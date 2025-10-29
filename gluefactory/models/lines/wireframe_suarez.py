@@ -1,26 +1,26 @@
 import argparse
+import time
 from pathlib import Path
 
 import cv2
 import matplotlib
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
-from PIL import Image
-
-from wireframe_distillation.wireframe_net import WireframeNet
-
-import numpy as np
-import torch
-import time
-from joblib import Parallel, delayed
-from pytlsd import lsd, lsd_from_points, lsd_opt
 from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
-from gluefactory.utils.image import compute_lsd_image_gradient, extract_non_zero_points_sorted_by_gradient
+from joblib import Parallel, delayed
+from matplotlib import pyplot as plt
+from PIL import Image
+from pytlsd import lsd, lsd_from_points, lsd_opt
+from wireframe_distillation.wireframe_net import WireframeNet
 
-from ..base_model import BaseModel
+from gluefactory.utils.image import (
+    compute_lsd_image_gradient,
+    extract_non_zero_points_sorted_by_gradient,
+)
+
 from ...settings import DATA_PATH
+from ..base_model import BaseModel
 
 
 class WireframeSuarez(BaseModel):
@@ -30,6 +30,7 @@ class WireframeSuarez(BaseModel):
 
     def download_model(self, path):
         import subprocess
+
         if not path.parent.is_dir():
             path.parent.mkdir(parents=True, exist_ok=True)
         link = "https://raw.githubusercontent.com/iferfra/wireframe-detector/main/checkpoints/checkpoint.pth"

@@ -1,15 +1,15 @@
 import numpy as np
 import torch
 from faster_pytlsd import lsd as fast_lsd
-from pytlsd import lsd, lsd_from_points, lsd_df, lsd_opt, lsd_from_points_learn
-from gluefactory.utils.image import extract_all_points_sorted_by_gradient
+from pytlsd import lsd, lsd_df, lsd_from_points, lsd_opt
 
 from gluefactory.models.lines.line_refinement import merge_lines
-from gluefactory.utils.image import compute_image_grad
+from gluefactory.utils.image import (
+    compute_image_grad,
+    extract_all_points_sorted_by_gradient,
+)
 
 from ..base_model import BaseModel
-    
-from concurrent.futures import ThreadPoolExecutor
 
 
 class FastLSDLineExtractor(BaseModel):
@@ -50,10 +50,7 @@ class FastLSDLineExtractor(BaseModel):
         # Currently we have 5 types of lsd entries
         assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
 
-
-    def detect_lines(
-        self, img, df, line_level = None
-    ):
+    def detect_lines(self, img, df, line_level=None):
         """
         detect lines in one image.
         Args:
@@ -93,7 +90,7 @@ class FastLSDLineExtractor(BaseModel):
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
                 gradangle=angle.detach().cpu().numpy(),
-                grad_nfa=False
+                grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
         elif self.conf.lsd_type == "fast":
             gradient, angle = self.compute_gradient_2d_noborder(img)
@@ -115,9 +112,8 @@ class FastLSDLineExtractor(BaseModel):
                 scale=1.0,
                 gradnorm=gradnorm.detach().cpu().numpy(),
                 gradangle=angle.detach().cpu().numpy(),
-                grad_nfa=False
+                grad_nfa=False,
             )[:, :4].reshape(-1, 2, 2)
-
 
         lines = torch.tensor(lines)
 
@@ -136,9 +132,7 @@ class FastLSDLineExtractor(BaseModel):
             lines = lines[indices]
 
         if self.conf.merge:
-            lines = merge_lines(
-                lines, thresh=4, overlap_thresh=0
-            )
+            lines = merge_lines(lines, thresh=4, overlap_thresh=0)
 
         n = len(lines)
         valid_mask = torch.ones(n, dtype=bool, device=lines.device)
@@ -147,7 +141,9 @@ class FastLSDLineExtractor(BaseModel):
         if self.conf.force_num_lines:
             pad = self.conf.max_num_lines - n
             if pad > 0:
-                pad_lines = torch.zeros((pad, 2, 2), dtype=lines.dtype, device=lines.device)
+                pad_lines = torch.zeros(
+                    (pad, 2, 2), dtype=lines.dtype, device=lines.device
+                )
                 lines = torch.cat([lines, pad_lines], dim=0)
 
                 pad_mask = torch.zeros(pad, dtype=torch.bool, device=lines.device)
@@ -177,9 +173,12 @@ class FastLSDLineExtractor(BaseModel):
         results = []
 
         if len(image) == 1:
-            results.append(process_one(image[0], line_df_denormalized[0], line_level[0]))
+            results.append(
+                process_one(image[0], line_df_denormalized[0], line_level[0])
+            )
         else:
             from concurrent.futures import ThreadPoolExecutor
+
             with ThreadPoolExecutor() as executor:
                 futures = [
                     executor.submit(process_one, img, df, ll)
@@ -192,7 +191,6 @@ class FastLSDLineExtractor(BaseModel):
         lines, valid_lines = zip(*results)
 
         return {"lines": list(lines), "valid_lines": list(valid_lines)}
-
 
     def loss(self, pred, data):
         raise NotImplementedError

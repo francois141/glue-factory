@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..multi_task_head import MultitaskHead
 from .base_model import BaseModel
 from .blocks import (
     FeatureFusionBlock,
@@ -10,7 +11,6 @@ from .blocks import (
     _make_encoder,
     forward_vit,
 )
-from ..multi_task_head import MultitaskHead
 
 
 def _make_fusion_block(features, use_bn):
@@ -83,18 +83,26 @@ class DPT(BaseModel):
         path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
-        
+
         out = self.scratch.output_conv(path_1)
 
         return out
 
+
 class DPTFieldModel(DPT):
-    def __init__(self, path=None, non_negative=True, head_size=[[3],[1],[1],[2],[2]],upsample=False, **kwargs):
+    def __init__(
+        self,
+        path=None,
+        non_negative=True,
+        head_size=[[3], [1], [1], [2], [2]],
+        upsample=False,
+        **kwargs,
+    ):
         features = kwargs["features"] if "features" in kwargs else 256
 
         kwargs["use_bn"] = True
 
-        num_class = sum(sum(head_size,[]))
+        num_class = sum(sum(head_size, []))
         layers = [
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
             # nn.BatchNorm2d(features // 2),
@@ -116,8 +124,7 @@ class DPTFieldModel(DPT):
     def forward(self, x):
 
         if x.shape[1] == 1:
-            x = torch.cat([x,x,x], dim=1)
+            x = torch.cat([x, x, x], dim=1)
 
         out = super().forward(x)
         return out, None
-

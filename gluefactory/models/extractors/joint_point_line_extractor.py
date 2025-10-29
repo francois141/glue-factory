@@ -11,15 +11,16 @@ from gluefactory.models.backbones.vit_encoder import VITBackbone
 from gluefactory.models.base_model import BaseModel
 from gluefactory.models.extractors.aliked import DKD, SDDH, SMH, InputPadder
 from gluefactory.models.extractors.dad import DadDetector
+from gluefactory.models.extractors.dad_distill import DadDistillDetector
 from gluefactory.models.extractors.dedode import DeDoDeDetector
+from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 from gluefactory.models.extractors.superpoint_open import SuperPoint
 from gluefactory.models.lines.fast_lsd_extractor import FastLSDLineExtractor
-from gluefactory.models.extractors.dad_distill import DadDistillDetector
 from gluefactory.utils.misc import change_dict_key
-from gluefactory.models.extractors.joint_point_line_extractor_utils import *
 
 aliked_checkpoint_url = "https://github.com/Shiaoming/ALIKED/raw/main/models/{}.pth"  # used for training based on ALIKED weights
 logger = logging.getLogger(__file__)
+
 
 class JointPointLineDetectorDescriptor(BaseModel):
     """
@@ -28,11 +29,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
     If a checkpoint is loaded, the config from the checkpoint is not. We could change that in the future.
     """
 
-    # default checkpoint used for automatic weight loading if no other path specified
-    # currently its the oxparis-800-focal checkpoint
-    jpl_default_checkpoint_url = (
-        "https://polybox.ethz.ch/index.php/s/IN0dxL4ljUacf9K/download"
-    )
+    # Default checkpoint used for automatic weight loading if no other path specified
+    # Here use best checkpoint as stored in the gluefactory repository
+    jpl_default_checkpoint_url = "assets/jpl_best.tar"
 
     default_conf = {
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
@@ -44,14 +43,14 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
         "freeze_lines": False,
-        "descriptor_branch": "aliked", # options are aliked or dedode
+        "descriptor_branch": "aliked",  # options are aliked or dedode
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
             "two_view": False,  # whether training is done with a two-view pipeline (True) or with a one-view pipeline (False)
             "aliked_pretrained": True,  # use pretrained ALIKED weights in backbone encoder
             "pretrain_kp_decoder": True,  # use pretrained ALIKED weights for keypoint-heatmap decoder
             "train_descriptors": {  # for train descriptors in one-view: generate gt descriptors, other losses for two_view
-                "gt_aliked_model": "aliked-n32", # dedode is also an option
+                "gt_aliked_model": "aliked-n32",  # dedode is also an option
                 "use_one_view_loss": True,  # In one view training can decide if train descriptors with this flag
                 "use_two_view_loss": True,  # can only be used if two_view training activated (sparseNRE loss)
             },
@@ -116,7 +115,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
         elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce":
             logger.warning("-- Using BCE loss for the points! --")
             self.loss_fn = nn.BCELoss(reduction="none")
-        elif self.conf.training.loss.kp_loss_name == "distill_dad_superpoint_bce_weighted":
+        elif (
+            self.conf.training.loss.kp_loss_name
+            == "distill_dad_superpoint_bce_weighted"
+        ):
             logger.warning("-- Using weighted BCE loss for the points! --")
             self.loss_fn = self.weighted_bce_loss
         else:
@@ -134,9 +136,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.backbone == "vit":
             self.encoder_backbone = VITBackbone()
         elif self.conf.backbone == "aliked":
-            self.encoder_backbone = AlikedEncoder(
-                aliked_model_cfg
-            )
+            self.encoder_backbone = AlikedEncoder(aliked_model_cfg)
         else:
             logger.warning(f"Unknown backbone {self.conf.backbone}!")
             raise NotImplementedError
@@ -237,9 +237,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         if self.conf.training.loss.kp_loss_name == "distill":
             # Use dad distillation
-            self.dad_distil = DadDistillDetector({
-                "max_num_keypoints": 1024,
-            })
+            self.dad_distil = DadDistillDetector(
+                {
+                    "max_num_keypoints": 1024,
+                }
+            )
 
         # Freeze df and backbone extractor
         if self.conf.freeze_lines:
@@ -254,21 +256,22 @@ class JointPointLineDetectorDescriptor(BaseModel):
             logger.info("Loading Super-point and DAD model for distillation")
             # For both dad and sp we fix number of returned keypoints as batching only works with fixed number of points
             # The number of points itself is irrelevant as we only use heatmap
-            self.dad_model = DadDetector({
-                "max_num_keypoints": 1024,
-                "nms_radius": 4,
-                "detection_threshold": 0.005,
-                "remove_borders": 4,
-                "descriptor_dim": 256,
-                "channels": [64, 64, 128, 128, 256],
-                "dense_outputs": None,
-                "weights": None,  # local path of pretrained weights
-            })
+            self.dad_model = DadDetector(
+                {
+                    "max_num_keypoints": 1024,
+                    "nms_radius": 4,
+                    "detection_threshold": 0.005,
+                    "remove_borders": 4,
+                    "descriptor_dim": 256,
+                    "channels": [64, 64, 128, 128, 256],
+                    "dense_outputs": None,
+                    "weights": None,  # local path of pretrained weights
+                }
+            )
             self.dad_model.eval()
-            self.superpoint_model = SuperPoint({
-                "max_num_keypoints": 1500,
-                "force_num_keypoints": True
-            })
+            self.superpoint_model = SuperPoint(
+                {"max_num_keypoints": 1500, "force_num_keypoints": True}
+            )
             self.superpoint_model.eval()
 
     def _forward(self, data: dict) -> torch.Tensor:
@@ -375,7 +378,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
             keypoint_descriptors, _ = self.descriptor_branch(feature_map, keypoints)
             output["descriptors"] = torch.stack(keypoint_descriptors)  # B N D
         else:
-            output["descriptors"] = self.descriptor_branch.describe_keypoints({"image": data["image"]}, keypoints[0].unsqueeze(0))
+            output["descriptors"] = self.descriptor_branch.describe_keypoints(
+                {"image": data["image"]}, keypoints[0].unsqueeze(0)
+            )
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
@@ -402,7 +407,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
 
         return output
-
 
     def loss(self, pred: dict, data: dict) -> dict:
         """
@@ -453,24 +457,21 @@ class JointPointLineDetectorDescriptor(BaseModel):
             if self.conf.training.two_view
             else None
         )
-        
+
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
         if self.conf.training.loss.use_one_view_df_loss:
             line_df = prediction_dict["line_distancefield"]
-            deeplsd_line_df =  gt_dict_view0["deeplsd_distance_field"]
+            deeplsd_line_df = gt_dict_view0["deeplsd_distance_field"]
 
             losses["one_view_line_df"] = F.l1_loss(
-                self.normalize_df(line_df)
-                * df_gt_mask_view0
-                * padding_mask_view0,
+                self.normalize_df(line_df) * df_gt_mask_view0 * padding_mask_view0,
                 self.normalize_df(deeplsd_line_df)
                 * df_gt_mask_view0
                 * padding_mask_view0,
                 # only supervise in line neighborhood
                 reduction="none",
             ).mean(dim=(1, 2))
-
 
             losses["total"] += (
                 self.conf.training.loss.loss_weights.one_view_line_df_weight
@@ -480,27 +481,32 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # Use BCE, WeightedBCE, Focal Loss or KL Divergence for point heatmap loss.
         # Generate ground truth on the fly if using dad and/or superpoint distill config
         if self.conf.training.loss.use_one_view_kp_loss:
-            image_data = {'image': img}
-            if self.conf.training.loss.kp_loss_name == "distill": 
-                keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(image_data, prediction_dict["keypoint_and_junction_score_map"])
+            image_data = {"image": img}
+            if self.conf.training.loss.kp_loss_name == "distill":
+                keypoint_scoremap_loss = self.dad_distil.get_kl_divergence(
+                    image_data, prediction_dict["keypoint_and_junction_score_map"]
+                )
             elif self.conf.training.loss.kp_loss_name == "distill_dad":
                 ground_heatmap = self.dad_model(image_data)["heatmap"]
                 keypoint_scoremap_loss = self.loss_fn(
-                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    prediction_dict["keypoint_and_junction_score_map"]
+                    * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
                 ).mean(dim=(1, 2))
             elif "distill_dad_superpoint" in self.conf.training.loss.kp_loss_name:
-                with torch.no_grad():  
+                with torch.no_grad():
                     ground_heatmap1 = self.dad_model(image_data)["heatmap"]
                     ground_heatmap2 = self.superpoint_model(image_data)["heatmap"]
                     ground_heatmap = torch.max(ground_heatmap1, ground_heatmap2)
                 keypoint_scoremap_loss = self.loss_fn(
-                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    prediction_dict["keypoint_and_junction_score_map"]
+                    * padding_mask_view0,
                     ground_heatmap * padding_mask_view0,
                 ).mean(dim=(1, 2))
             else:
                 keypoint_scoremap_loss = self.loss_fn(
-                    prediction_dict["keypoint_and_junction_score_map"] * padding_mask_view0,
+                    prediction_dict["keypoint_and_junction_score_map"]
+                    * padding_mask_view0,
                     gt_dict_view0["superpoint_heatmap"] * padding_mask_view0,
                 ).mean(dim=(1, 2))
 
@@ -681,7 +687,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
             metrics = self.metrics(pred, data)
         return losses, metrics
 
-
     def weighted_bce_loss(
         self, prediction: torch.Tensor, target: torch.Tensor
     ) -> torch.Tensor:
@@ -860,12 +865,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
     def denormalize_df(self, df_norm: torch.Tensor) -> torch.Tensor:
         return torch.exp(-df_norm) * self.conf.line_neighborhood
 
-
     def get_numer_of_parameters(self):
         def count_parameters(model: nn.Module):
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-        return (count_parameters(self.distance_field_branch) +
-                count_parameters(self.descriptor_branch) +
-                count_parameters(self.keypoint_and_junction_branch) +
-                count_parameters(self.encoder_backbone))
+        return (
+            count_parameters(self.distance_field_branch)
+            + count_parameters(self.descriptor_branch)
+            + count_parameters(self.keypoint_and_junction_branch)
+            + count_parameters(self.encoder_backbone)
+        )

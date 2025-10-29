@@ -8,10 +8,11 @@ from types import SimpleNamespace
 
 import torch
 
-from gluefactory.models.lines.deeplsd import DeepLSD
 from gluefactory.models.extractors.superpoint import SuperPoint
+from gluefactory.models.lines.deeplsd import DeepLSD
 
 from ..base_model import BaseModel
+
 
 class SuperpointDeepLSD(BaseModel):
     default_conf = {}

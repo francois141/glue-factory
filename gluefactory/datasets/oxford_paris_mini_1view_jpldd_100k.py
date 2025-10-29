@@ -10,7 +10,12 @@ import torch
 
 from gluefactory.datasets import BaseDataset, augmentations
 from gluefactory.settings import DATA_PATH, root
-from gluefactory.utils.image import ImagePreprocessor, load_image, read_image, numpy_image_to_torch
+from gluefactory.utils.image import (
+    ImagePreprocessor,
+    load_image,
+    numpy_image_to_torch,
+    read_image,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +120,6 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
                 else:
                     print(f"Skipping {img_file} — one or more files missing or empty.")
 
-
             # Ensure the parent directory exists
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +127,7 @@ class OxfordParisMiniOneViewJPLDD(BaseDataset):
             with open(output_path, "w") as f:
                 for file_path in matching_files:
                     f.write(str(file_path) + "\n")
-                
+
             # Log how many images we have
             print(f"Dataset contains {len(matching_files)} images")
 
@@ -256,9 +260,7 @@ class _Dataset(torch.utils.data.Dataset):
             logger.info(f"NUMBER OF IMAGES WITH GT: {len(self.image_sub_paths)}")
 
         self.img_dir = DATA_PATH / conf.data_dir
-        self.image_sub_paths = [
-            Path(str(p)[:-15]) for p in image_sub_paths
-        ]  
+        self.image_sub_paths = [Path(str(p)[:-15]) for p in image_sub_paths]
 
     def register_image_preprocessor_for_size(self, size: int) -> None:
         """
@@ -294,7 +296,7 @@ class _Dataset(torch.utils.data.Dataset):
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img
-        
+
     def _read_af(self, img_folder_path, enforce_batch_dim=False):
         """
         Read distance field as tensor and puts it on device
@@ -384,15 +386,19 @@ class _Dataset(torch.utils.data.Dataset):
             distance_field = preprocessor_df_out["image"].squeeze(
                 0
             )  # only store image here as padding map will be stored by preprocessing image
-            angle_field = self.preprocessors[shape](angle_field.unsqueeze(0))["image"].squeeze(0)
-            keypoint_scores = self.preprocessors[shape](keypoint_scores.unsqueeze(0))["image"].squeeze(0)
+            angle_field = self.preprocessors[shape](angle_field.unsqueeze(0))[
+                "image"
+            ].squeeze(0)
+            keypoint_scores = self.preprocessors[shape](keypoint_scores.unsqueeze(0))[
+                "image"
+            ].squeeze(0)
 
         features[df_gt_key] = distance_field
         features[af_gt_key] = angle_field
         features[heatmap_gt_key_name] = keypoint_scores
 
         return features
-    
+
     def __getitem__(self, idx):
         """
         Dataloader is usually just returning one datapoint by design. Batching is done in Loader normally.

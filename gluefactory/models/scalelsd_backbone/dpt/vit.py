@@ -1,10 +1,10 @@
+import math
+import types
+
+import timm
 import torch
 import torch.nn as nn
-import timm
-import types
-import math
 import torch.nn.functional as F
-
 
 activations = {}
 
@@ -26,7 +26,8 @@ def get_attention(name):
         qkv = (
             module.qkv(x)
             .reshape(B, N, 3, module.num_heads, C // module.num_heads)
-            .permute(2, 0, 3, 1, 4).contiguous()
+            .permute(2, 0, 3, 1, 4)
+            .contiguous()
         )
         q, k, v = (
             qkv[0],
@@ -364,7 +365,8 @@ def _make_vit_b_rn50_backbone(
     ###
     if use_layer_scale:
         from timm.models.vision_transformer import LayerScale
-        for i, block in enumerate (model.blocks) :
+
+        for i, block in enumerate(model.blocks):
             block.ls1 = LayerScale(vit_features)
             block.ls2 = LayerScale(vit_features)
 

@@ -2,37 +2,41 @@
 Run the homography adaptation with Superpoint for 100k images from the oxford paris revisited dataset
 Goal: create groundtruth with superpoint. Format: stores groundtruth for every image in a separate file.
 """
-import torch.nn.functional as F
-import argparse
-from pathlib import Path
-import matplotlib.pyplot as plt
-from faster_pytlsd import lsd as fast_lsd
-from gluefactory.ground_truth_generation.generate_gt_deeplsd import generate_ground_truth_with_homography_adaptation
 
+import argparse
 import random
+from pathlib import Path
+
+# TODO: Install this library
+import afm_op
 import cv2
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from PIL import Image
+import torch.nn.functional as F
+from faster_pytlsd import lsd as fast_lsd
 from joblib import Parallel, delayed
 from kornia.geometry.transform import warp_perspective
 from kornia.morphology import erosion
 from omegaconf import OmegaConf
+from PIL import Image
+from pytlsd import lsd
 from scipy.ndimage import maximum_filter
 from tqdm import tqdm
-from pytlsd import lsd
-# TODO: Install this library
-import afm_op
 
 from gluefactory.datasets import get_dataset
+from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
 from gluefactory.geometry.homography import sample_homography_corners
+from gluefactory.ground_truth_generation.generate_gt_deeplsd import (
+    generate_ground_truth_with_homography_adaptation,
+)
+from gluefactory.models.extractors.dad import DadDetector
 from gluefactory.models.extractors.superpoint import top_k_keypoints
 from gluefactory.models.extractors.superpoint_open import SuperPoint
-from gluefactory.models.extractors.dad import DadDetector
-from gluefactory.datasets.homographies_deeplsd import sample_homography_deeplsd
-from gluefactory.settings import EVAL_PATH, DATA_PATH
 from gluefactory.models.lines.deeplsd import DeepLSD
+from gluefactory.settings import DATA_PATH, EVAL_PATH
+
 
 class KPExtractor:
     def __init__(self, config):
@@ -207,6 +211,7 @@ homography_params = {
     "allow_artifacts": True,
 }
 
+
 def warp_points(points: torch.Tensor, H) -> torch.Tensor:
     """Warp 2D points by a homography H using PyTorch tensors."""
     H = torch.tensor(H).to(device)
@@ -230,31 +235,33 @@ def warp_points(points: torch.Tensor, H) -> torch.Tensor:
 
     return reproj_points
 
+
 def warp_lines(lines, H):
-    """ Warp lines of the shape [N, 2, 2] by an homography H. """
+    """Warp lines of the shape [N, 2, 2] by an homography H."""
     return warp_points(lines.reshape(-1, 2), H).reshape(-1, 2, 2)
 
 
 # Deep LSD Config
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 conf = {
-    'detect_lines': False,  # Whether to detect lines or only DF/AF
-    'line_detection_params': {
-        'merge': False,  # Whether to merge close-by lines
-        'filtering': True,
+    "detect_lines": False,  # Whether to detect lines or only DF/AF
+    "line_detection_params": {
+        "merge": False,  # Whether to merge close-by lines
+        "filtering": True,
         # Whether to filter out lines based on the DF/AF. Use 'strict' to get an even stricter filtering
-        'grad_thresh': 3,
-        'grad_nfa': True,
+        "grad_thresh": 3,
+        "grad_nfa": True,
         # If True, use the image gradient and the NFA score of LSD to further threshold lines. We recommand using it for easy images, but to turn it off for challenging images (e.g. night, foggy, blurry images)
-    }
+    },
 }
 
 # Load the model
 deeplsd_network = DeepLSD(conf)
 deeplsd_network = deeplsd_network.to(device).eval()
 
+
 def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5):
-    """ Perform homography adaptation to regress line distance function maps.
+    """Perform homography adaptation to regress line distance function maps.
     Args:
         img: a grayscale np image.
         num: number of homographies used during HA.
@@ -273,22 +280,27 @@ def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5
     # We currently set to a single homography only
     num = 1
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (border_margin * 2, border_margin * 2))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (border_margin * 2, border_margin * 2)
+    )
 
     deeplsd_generation = True
     if deeplsd_generation:
-        df, angle = generate_ground_truth_with_homography_adaptation(torch.tensor(img).to(device).unsqueeze(0), deeplsd_network)
+        df, angle = generate_ground_truth_with_homography_adaptation(
+            torch.tensor(img).to(device).unsqueeze(0), deeplsd_network
+        )
         return df.cpu().numpy(), angle.cpu().numpy()
 
     with torch.no_grad():
-        pix_loc = torch.tensor(np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing='ij'),
-                        axis=-1)).to(device)
+        pix_loc = torch.tensor(
+            np.stack(np.meshgrid(np.arange(h), np.arange(w), indexing="ij"), axis=-1)
+        ).to(device)
 
         previous_value = None
         analysis_values_mean = []
         analysis_values_max = []
 
-        raster_lines = np.zeros_like(img[:,:,0])
+        raster_lines = np.zeros_like(img[:, :, 0])
 
         # Loop through all the homographies
         for i in range(num):
@@ -300,11 +312,14 @@ def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5
             H_inv = np.linalg.inv(H)
 
             # Warp the image
-            warped_img = cv2.warpPerspective(img, H, size,
-                                            borderMode=cv2.BORDER_REPLICATE)
+            warped_img = cv2.warpPerspective(
+                img, H, size, borderMode=cv2.BORDER_REPLICATE
+            )
 
             # Regress the DF on the warped image
-            warped_lines = lsd((warped_img * 255).astype(np.uint8))[:, [1, 0, 3, 2]].reshape(-1, 2, 2)
+            warped_lines = lsd((warped_img * 255).astype(np.uint8))[
+                :, [1, 0, 3, 2]
+            ].reshape(-1, 2, 2)
 
             # Warp the lines back
             warped_lines = torch.tensor(warped_lines).to(device)
@@ -315,17 +330,20 @@ def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5
             cuda_lines = lines[:, :, [1, 0]].to(torch.float32)
             cuda_lines = cuda_lines.reshape(-1, 4)[None].cuda()
             offset = afm_op.afm(
-                cuda_lines,
-                torch.IntTensor([[0, num_lines, h, w]]).cuda(), h, w)[0]
+                cuda_lines, torch.IntTensor([[0, num_lines, h, w]]).cuda(), h, w
+            )[0]
 
             offset = offset[0].permute(1, 2, 0)[:, :, [1, 0]]
 
             df = torch.norm(offset, dim=-1)
-            angle = torch.remainder(torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi)
+            angle = torch.remainder(
+                torch.arctan2(offset[:, :, 0], offset[:, :, 1]) + torch.pi / 2, torch.pi
+            )
 
             # Compute the valid pixels
-            count = cv2.warpPerspective(np.ones_like(img), H_inv, size,
-                                    flags=cv2.INTER_NEAREST)
+            count = cv2.warpPerspective(
+                np.ones_like(img), H_inv, size, flags=cv2.INTER_NEAREST
+            )
             count = cv2.erode(count, kernel)
             counts.append(count)
 
@@ -344,22 +362,31 @@ def ha_df_deeplsd(path, img, is_analysis, num=100, border_margin=3, min_counts=5
         avg_df = torch.nanmedian(df_maps, dim=0).values.cpu().numpy()
 
         # Median of the angle
-        circ_bound = (torch.minimum(torch.pi - angles, angles)
-                    * counts).sum(0) / counts.sum(0) < 0.3
+        circ_bound = (torch.minimum(torch.pi - angles, angles) * counts).sum(
+            0
+        ) / counts.sum(0) < 0.3
         angles[:, circ_bound] -= torch.where(
-            angles[:, circ_bound] > torch.pi /2,
+            angles[:, circ_bound] > torch.pi / 2,
             torch.ones_like(angles[:, circ_bound]) * torch.pi,
-            torch.zeros_like(angles[:, circ_bound]))
+            torch.zeros_like(angles[:, circ_bound]),
+        )
         angles[counts == 0] = torch.nan
-        avg_angle = torch.remainder(torch.nanmedian(angles, axis=0).values, torch.pi).cpu().numpy()
-
+        avg_angle = (
+            torch.remainder(torch.nanmedian(angles, axis=0).values, torch.pi)
+            .cpu()
+            .numpy()
+        )
 
         # Generate the background mask and a saliency score
-        raster_lines = np.where(raster_lines > min_counts, np.ones_like(img[:,:,0]),
-                                np.zeros_like(img[:,:,0]))
+        raster_lines = np.where(
+            raster_lines > min_counts,
+            np.ones_like(img[:, :, 0]),
+            np.zeros_like(img[:, :, 0]),
+        )
         raster_lines = cv2.dilate(raster_lines, np.ones((21, 21), dtype=np.uint8))
         bg_mask = (1 - raster_lines).astype(float)
         return avg_df, avg_angle, bg_mask
+
 
 def get_dataset_and_loader(
     num_workers: int, dataset: str, chunk: int
@@ -381,6 +408,7 @@ def get_dataset_and_loader(
     dataset = get_dataset(omega_conf.name)(omega_conf)
     loader = dataset.get_data_loader(omega_conf.get("split", "all"))
     return loader
+
 
 def ha_forward_points(img, is_analysis, num=100):
     """Perform homography adaptation to regress line distance function maps.
@@ -443,9 +471,7 @@ def ha_forward_points(img, is_analysis, num=100):
 
     erosion_kernel = erosion_kernel.to(device)
 
-    sp_image_tensor = (
-        torch.tensor(img, dtype=torch.float32, device=device).unsqueeze(0)
-    )
+    sp_image_tensor = torch.tensor(img, dtype=torch.float32, device=device).unsqueeze(0)
     n_mini_batch = int(np.ceil(num / bs))
     scores = torch.empty((B, 0, h, w), dtype=torch.float, device=device)
     counts = torch.empty((B, 0, h, w), dtype=torch.float, device=device)
@@ -503,16 +529,21 @@ def ha_forward_points(img, is_analysis, num=100):
 
     return scoremap
 
+
 def check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8):
     # First add folder
     complete_out_folder = (output_folder_path / str(img_data["name"][0])).parent
     complete_out_folder.mkdir(parents=True, exist_ok=True)
 
-    base_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_base_image.jpg"
+    base_image_path = (
+        complete_out_folder
+        / f"{Path(img_data['name'][0]).name.split('.')[0]}_base_image.jpg"
+    )
 
     if not base_image_path.exists():
         # Save the base image as jpg
-        Image.fromarray(image_u8).save(base_image_path, format='JPEG')
+        Image.fromarray(image_u8).save(base_image_path, format="JPEG")
+
 
 def process_points(img_data, num_H, output_folder_path, is_analysis):
     """
@@ -521,7 +552,10 @@ def process_points(img_data, num_H, output_folder_path, is_analysis):
     assert len(img_data["name"]) == 1  # Currently expect batch size one!
 
     complete_out_folder = (output_folder_path / str(img_data["name"][0])).parent
-    points_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_heatmap.npy"
+    points_image_path = (
+        complete_out_folder
+        / f"{Path(img_data['name'][0]).name.split('.')[0]}_heatmap.npy"
+    )
 
     # If we already generated the value for this one, we can ignore it - that way we can transparently restart the workload later
     if points_image_path.exists():
@@ -537,6 +571,7 @@ def process_points(img_data, num_H, output_folder_path, is_analysis):
     superpoint_heatmap = ha_forward_points(image_u8, is_analysis, num=num_H).cpu()
     np.save(points_image_path, superpoint_heatmap.cpu().numpy())
 
+
 def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     """
     Perform homography adaptation with faster_lsd for a given image and store results.
@@ -544,7 +579,9 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     assert len(img_data["name"]) == 1  # Currently expect batch size one!
 
     complete_out_folder = (output_folder_path / str(img_data["name"][0])).parent
-    lines_image_path = complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy"
+    lines_image_path = (
+        complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy"
+    )
 
     # If we already generated the value for this one, we can ignore it - that way we can transparently restart the workload later
     if lines_image_path.exists():
@@ -557,13 +594,20 @@ def process_distance_field(img_data, num_H, output_folder_path, is_analysis):
     check_and_save_base_image_if_not_exists(img_data, output_folder_path, image_u8)
 
     # Run homography adaptation
-    df, af = ha_df_deeplsd(img_data["name"], image_numpy,is_analysis, num=num_H)
+    df, af = ha_df_deeplsd(img_data["name"], image_numpy, is_analysis, num=num_H)
 
     # Save the distance field
-    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy", df)
+    np.save(
+        complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_df.npy",
+        df,
+    )
 
     # Save the angle field
-    np.save(complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.npy", af)
+    np.save(
+        complete_out_folder / f"{Path(img_data['name'][0]).name.split('.')[0]}_af.npy",
+        af,
+    )
+
 
 def process_both(img_data, num_H, output_folder_path, is_analysis):
     """
@@ -572,26 +616,28 @@ def process_both(img_data, num_H, output_folder_path, is_analysis):
     process_distance_field(img_data, num_H, output_folder_path, is_analysis)
     process_points(img_data, num_H, output_folder_path, is_analysis)
 
-def export_ha(
-    data_loader, output_folder_path, num_H: int, n_jobs: int, type:str
-):
-    if type == 'points':
+
+def export_ha(data_loader, output_folder_path, num_H: int, n_jobs: int, type: str):
+    if type == "points":
         Parallel(n_jobs=n_jobs, backend="loky")(
             delayed(process_points)(img_data, num_H, output_folder_path, args.analysis)
             for img_data in tqdm(data_loader, total=len(data_loader))
         )
-    elif type == 'lines':
+    elif type == "lines":
         Parallel(n_jobs=n_jobs, backend="loky")(
-            delayed(process_distance_field)(img_data, num_H, output_folder_path, args.analysis)
+            delayed(process_distance_field)(
+                img_data, num_H, output_folder_path, args.analysis
+            )
             for img_data in tqdm(data_loader, total=len(data_loader))
         )
-    elif type == 'both':
+    elif type == "both":
         Parallel(n_jobs=n_jobs, backend="loky")(
             delayed(process_both)(img_data, num_H, output_folder_path, args.analysis)
             for img_data in tqdm(data_loader, total=len(data_loader))
         )
     else:
         print("Unknown generation type")
+
 
 # Command to launch
 # python -m gluefactory.ground_truth_generation.oxparis_100k oxford_paris_mini_100k --num_H 1
@@ -601,13 +647,20 @@ if __name__ == "__main__":
         "dataset", choices=["minidepth", "oxford_paris_mini_100k", "scannet"]
     )
     parser.add_argument(
-        "--type", type=str, help="Choose what to generate [points|lines]", choices=["points", "lines", "both"], default="both"
+        "--type",
+        type=str,
+        help="Choose what to generate [points|lines]",
+        choices=["points", "lines", "both"],
+        default="both",
     )
     parser.add_argument(
         "--output_folder", type=str, help="Output folder.", default="oxparis_100k"
     )
     parser.add_argument(
-        "--chunk", type=int, default=0, help="Chunk of the dataset to use. Default is 0, which is the first chunk."
+        "--chunk",
+        type=int,
+        default=0,
+        help="Chunk of the dataset to use. Default is 0, which is the first chunk.",
     )
     parser.add_argument(
         "--num_H", type=int, default=100, help="Number of homographies used during HA."
@@ -624,7 +677,11 @@ if __name__ == "__main__":
         default=1,
         help="Number of jobs the dataloader uses to load images",
     )
-    parser.add_argument('--analysis', action='store_true', help='Analyse max difference between iterations')
+    parser.add_argument(
+        "--analysis",
+        action="store_true",
+        help="Analyse max difference between iterations",
+    )
     args = parser.parse_args()
 
     out_folder_path = EVAL_PATH / args.output_folder
@@ -636,8 +693,8 @@ if __name__ == "__main__":
     print("N JOBS: ", args.n_jobs)
     print("N DATALOADER JOBS: ", args.n_jobs_dataloader)
 
-    dataloader = get_dataset_and_loader(args.n_jobs_dataloader, args.dataset,args.chunk)
-    export_ha(
-        dataloader, out_folder_path, args.num_H, args.n_jobs, args.type
+    dataloader = get_dataset_and_loader(
+        args.n_jobs_dataloader, args.dataset, args.chunk
     )
+    export_ha(dataloader, out_folder_path, args.num_H, args.n_jobs, args.type)
     print("Done !")

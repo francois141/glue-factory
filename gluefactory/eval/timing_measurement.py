@@ -8,10 +8,9 @@ Attention: Make sure you configure batch_size and dataset split correctly.
 import argparse
 import time
 
-import torch
-import torch.nn as nn
 import numpy as np
 import torch
+import torch.nn as nn
 from omegaconf import OmegaConf
 from tqdm import tqdm
 

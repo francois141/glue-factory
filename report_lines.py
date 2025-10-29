@@ -60,7 +60,9 @@ def write_table(f, title, all_results):
         return
 
     # Sort all keys
-    all_keys = sorted({str(k) for metrics in all_results.values() for k in metrics.keys()})
+    all_keys = sorted(
+        {str(k) for metrics in all_results.values() for k in metrics.keys()}
+    )
 
     # Table header
     f.write(f"## {title}\n\n")
@@ -84,7 +86,9 @@ def main():
         merged_results.update(results)
 
     # Separate by dataset
-    hpatches_results = {k: v for k, v in merged_results.items() if "hpatches" in k.lower()}
+    hpatches_results = {
+        k: v for k, v in merged_results.items() if "hpatches" in k.lower()
+    }
     rdnim_results = {k: v for k, v in merged_results.items() if "rdnim" in k.lower()}
 
     # Write tables

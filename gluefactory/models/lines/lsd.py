@@ -1,11 +1,16 @@
+import time
+
 import numpy as np
 import torch
-import time
-from joblib import Parallel, delayed
-from pytlsd import lsd, lsd_from_points, lsd_opt
 from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
-from gluefactory.utils.image import compute_lsd_image_gradient, extract_non_zero_points_sorted_by_gradient
+from joblib import Parallel, delayed
+from pytlsd import lsd, lsd_from_points, lsd_opt
+
+from gluefactory.utils.image import (
+    compute_lsd_image_gradient,
+    extract_non_zero_points_sorted_by_gradient,
+)
 
 from ..base_model import BaseModel
 
@@ -29,7 +34,7 @@ class LSD(BaseModel):
     def detect_lines(self, img):
         start = time.perf_counter()
         # Run LSD
-        if 'search' in self.conf and self.conf.search:
+        if "search" in self.conf and self.conf.search:
             segs = params_lsd(
                 img,
                 scale=self.conf.scale,
@@ -37,7 +42,7 @@ class LSD(BaseModel):
                 density_th=0.0,
                 quant=self.conf.quant,
                 ang_th=self.conf.angle_th,
-                with_gaussian=self.conf.with_gaussian
+                with_gaussian=self.conf.with_gaussian,
             )
         elif self.conf.run_type == "default":
             segs = lsd(img)
@@ -53,7 +58,7 @@ class LSD(BaseModel):
                 interests_points.detach().cpu().numpy(),
                 scale=1.0,
                 gradnorm=gradient.detach().cpu().numpy(),
-                gradangle=angles.detach().cpu().numpy()
+                gradangle=angles.detach().cpu().numpy(),
             )
 
         end = time.perf_counter()
@@ -118,7 +123,12 @@ class LSD(BaseModel):
             line_scores = torch.tensor(line_scores, dtype=torch.float, device=device)
             valid_lines = torch.tensor(valid_lines, dtype=torch.bool, device=device)
 
-        return {"lines": lines, "line_scores": line_scores, "valid_lines": valid_lines, "latencies": latencies}
+        return {
+            "lines": lines,
+            "line_scores": line_scores,
+            "valid_lines": valid_lines,
+            "latencies": latencies,
+        }
 
     def loss(self, pred, data):
         raise NotImplementedError

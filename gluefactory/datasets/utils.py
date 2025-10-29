@@ -157,6 +157,7 @@ def zero_pad(size, *images):
         ret.append(padded)
     return ret
 
+
 def warp_points(points, H):
     """Warp 2D points by an homography H."""
     n_points = points.shape[0]

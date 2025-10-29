@@ -1,10 +1,12 @@
 import numpy as np
 import torch
 
+import gluefactory.models.scalelsd_inference as scalelsd_inference
+
 from ...settings import DATA_PATH
 from ..base_model import BaseModel
 
-import gluefactory.models.scalelsd_inference as scalelsd_inference
+
 class ScaleLSD(BaseModel):
     default_conf = {
         "max_num_lines": None,
@@ -14,27 +16,29 @@ class ScaleLSD(BaseModel):
 
     required_data_keys = ["image"]
 
-    def load_scalelsd_model(self, ckpt_path, device='cuda'):
+    def load_scalelsd_model(self, ckpt_path, device="cuda"):
         """load model"""
-        use_layer_scale = False if 'v1' in str(ckpt_path) else True
+        use_layer_scale = False if "v1" in str(ckpt_path) else True
 
-        model = scalelsd_inference.ScaleLSD(self.conf, gray_scale=True, use_layer_scale=use_layer_scale)
+        model = scalelsd_inference.ScaleLSD(
+            self.conf, gray_scale=True, use_layer_scale=use_layer_scale
+        )
         model = model.eval().to(device)
 
-        state_dict = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+        state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         try:
-            model.load_state_dict(state_dict['model_state'])
+            model.load_state_dict(state_dict["model_state"])
         except:
             model.load_state_dict(state_dict)
 
         return model
 
     def _init(self, conf):
-        self.model_name = 'scalelsd-vitbase-v2-train-sa1b.pt'
+        self.model_name = "scalelsd-vitbase-v2-train-sa1b.pt"
         if self.conf.force_num_lines:
-             assert (
-                 self.conf.max_num_lines is not None
-             ), "Missing max_num_lines parameter"
+            assert (
+                self.conf.max_num_lines is not None
+            ), "Missing max_num_lines parameter"
         ckpt = DATA_PATH / "weights" / self.model_name
         if not ckpt.is_file():
             self.download_model(ckpt)
@@ -67,8 +71,8 @@ class ScaleLSD(BaseModel):
 
         # Line scores are the sqrt of the length
         for seg in segs:
-            line_pred = seg['lines_pred'].reshape(-1, 2,2)
-            scores = seg['lines_score'].reshape(-1)
+            line_pred = seg["lines_pred"].reshape(-1, 2, 2)
+            scores = seg["lines_score"].reshape(-1)
             line_pred = line_pred[scores >= self.conf.threshold].detach().cpu()
             scores = scores[scores >= self.conf.threshold].detach().cpu()
 
@@ -92,10 +96,22 @@ class ScaleLSD(BaseModel):
             valid_lines.append(valid_mask)
 
         # Batch if possible
-        if len(image) == 1: #or self.conf.force_num_lines:
-            lines = torch.from_numpy(np.stack(lines, axis=0).astype(np.float32)).to(image.device).float()
-            line_scores = torch.from_numpy(np.stack(line_scores, axis=0).astype(np.float32)).to(image.device).float()
-            valid_lines = torch.from_numpy(np.stack(valid_lines, axis=0).astype(np.uint8)).to(image.device).bool()
+        if len(image) == 1:  # or self.conf.force_num_lines:
+            lines = (
+                torch.from_numpy(np.stack(lines, axis=0).astype(np.float32))
+                .to(image.device)
+                .float()
+            )
+            line_scores = (
+                torch.from_numpy(np.stack(line_scores, axis=0).astype(np.float32))
+                .to(image.device)
+                .float()
+            )
+            valid_lines = (
+                torch.from_numpy(np.stack(valid_lines, axis=0).astype(np.uint8))
+                .to(image.device)
+                .bool()
+            )
 
         return {"lines": lines, "line_scores": line_scores, "valid_lines": valid_lines}
 

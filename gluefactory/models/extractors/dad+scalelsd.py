@@ -4,10 +4,11 @@ The code comes from: https://github.com/Parskatt/dad
 
 import torch
 
-from gluefactory.models.lines.scalelsd import ScaleLSD
 from gluefactory.models.extractors.dad import DadDetector
+from gluefactory.models.lines.scalelsd import ScaleLSD
 
 from ..base_model import BaseModel
+
 
 class DaDScaleLSD(BaseModel):
     default_conf = {}

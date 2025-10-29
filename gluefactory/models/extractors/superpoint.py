@@ -8,6 +8,7 @@ Described in:
 Original code: github.com/MagicLeapResearch/SuperPointPretrainedNetwork
 """
 
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,6 @@ import torch
 from kornia.geometry.transform import warp_perspective
 from kornia.morphology import erosion
 from torch import nn
-import subprocess
 
 from gluefactory.datasets.homographies import sample_homography_corners
 from gluefactory.models.base_model import BaseModel

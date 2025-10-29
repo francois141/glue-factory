@@ -10,7 +10,7 @@ import torch
 from tqdm import tqdm
 
 from gluefactory.datasets import BaseDataset
-from gluefactory.settings import root, DATA_PATH
+from gluefactory.settings import DATA_PATH, root
 from gluefactory.utils.image import ImagePreprocessor, load_image
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class OxfordParisMini(BaseDataset):
         "test_batch_size": 1,
         "val_batch_size": 1,
         "all_batch_size": 1,
-        "chunk": 4, # Decides which chunk to download
+        "chunk": 4,  # Decides which chunk to download
         "device": None,  # specify device to move image data to. if None is given, just read, skip move to device
         "split": "train",  # train, val, test
         "seed": 0,
@@ -66,13 +66,13 @@ class OxfordParisMini(BaseDataset):
         if not base_path.exists():
             self.download_oxford_paris_mini(self.conf.chunk)
         # Now we generate the image list on the fly
-        files = [str(p) for p in base_path.rglob('*.jpg') if p.is_file()]
+        files = [str(p) for p in base_path.rglob("*.jpg") if p.is_file()]
         to_strip = base_path_path
-        files = [e[len(to_strip):] for e in files]
+        files = [e[len(to_strip) :] for e in files]
 
-        with open(img_list_path, 'w') as f:  # Truncate mode by default
+        with open(img_list_path, "w") as f:  # Truncate mode by default
             for file_path in files:
-                f.write(file_path + '\n')
+                f.write(file_path + "\n")
 
         # Ensure the file exists
         with open(img_list_path, "r") as f:
@@ -107,17 +107,16 @@ class OxfordParisMini(BaseDataset):
         url_base = "http://ptak.felk.cvut.cz/revisitop/revisitop1m/"
         num_parts = 1
         # go through dataset parts, one by one and only keep wanted images in img_list
-        for i in tqdm(range(part, num_parts+part), position=1):
+        for i in tqdm(range(part, num_parts + part), position=1):
             tar_name = f"revisitop1m.{i+1}.tar.gz"
             tar_url = url_base + "jpg/" + tar_name
             tmp_tar_path = tmp_dir / tar_name
             torch.hub.download_url_to_file(tar_url, tmp_tar_path)
-            with tarfile.open(tmp_tar_path, 'r:*') as tar:
+            with tarfile.open(tmp_tar_path, "r:*") as tar:
                 tar.extractall(path=part_dir)
             tmp_tar_path.unlink()
 
         shutil.rmtree(tmp_dir)
-
 
     def get_dataset(self, split):
         assert split in ["train", "val", "test", "all"]
@@ -185,7 +184,7 @@ class _Dataset(torch.utils.data.Dataset):
         if self.conf.device is not None:
             img = img.to(self.conf.device)
         return img
-    
+
     def _read_groundtruth(self, image_path, enforce_batch_dim=True):
         """
         Reads groundtruth for points and lines from respective h5files.

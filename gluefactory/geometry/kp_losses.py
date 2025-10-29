@@ -438,7 +438,9 @@ def soft_argmax_only_loss(scores, scores_w, keypoints, valid_kp, H, radius, max_
         )
 
     # --- Step 4: Warp keypoints to the other image
-    kp_w = warp_points(keypoints[:, :, [1, 0]].float(), H)  # warp original float keypoints
+    kp_w = warp_points(
+        keypoints[:, :, [1, 0]].float(), H
+    )  # warp original float keypoints
 
     # --- Step 5: Check for NaNs/Infs in warped keypoints
     if torch.isnan(kp_w).any() or torch.isinf(kp_w).any():

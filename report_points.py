@@ -13,13 +13,11 @@ def parse_file(path):
         for line in f:
             line = line.strip()
 
-            if "H_error_ransac@" in line or 'rel_pose_error@' in line:
+            if "H_error_ransac@" in line or "rel_pose_error@" in line:
                 parts = line.split(":")
                 key = parts[0].strip().lstrip("{")
                 val = parts[1].strip().rstrip(",}; ")
                 results[key] = float(val)
-
-
 
             elif line.startswith("H_error_ransac"):
                 val = line.split(":")[1].strip().rstrip(",}; ")
@@ -56,7 +54,9 @@ def write_table(f, title, all_results):
         return
 
     # Sort all keys
-    all_keys = sorted({str(k) for metrics in all_results.values() for k in metrics.keys()})
+    all_keys = sorted(
+        {str(k) for metrics in all_results.values() for k in metrics.keys()}
+    )
 
     # Table header
     f.write(f"## {title}\n\n")
@@ -80,9 +80,15 @@ def main():
         merged_results.update(results)
 
     # Separate by dataset
-    hpatches_results = {k: v for k, v in merged_results.items() if "hpatches" in k.lower()}
-    megadepth_results = {k: v for k, v in merged_results.items() if "megadepth" in k.lower()}
-    scannet_results = {k: v for k, v in merged_results.items() if "scannet" in k.lower()}
+    hpatches_results = {
+        k: v for k, v in merged_results.items() if "hpatches" in k.lower()
+    }
+    megadepth_results = {
+        k: v for k, v in merged_results.items() if "megadepth" in k.lower()
+    }
+    scannet_results = {
+        k: v for k, v in merged_results.items() if "scannet" in k.lower()
+    }
 
     # Write tables
     with open(OUTPUT_FILE, "w") as f:
@@ -90,7 +96,6 @@ def main():
         write_table(f, "HPatches", hpatches_results)
         write_table(f, "Megadepth", megadepth_results)
         write_table(f, "Scannet", scannet_results)
-
 
     print(f"✅ Results written to {OUTPUT_FILE}")
 

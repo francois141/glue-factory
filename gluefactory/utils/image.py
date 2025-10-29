@@ -7,11 +7,9 @@ import kornia
 import numpy as np
 import torch
 import torch.nn.functional as F
-from omegaconf import OmegaConf
 import torchvision.transforms as T
-import torch
-import torch.nn.functional as F
 import torchvision.transforms.functional as TF
+from omegaconf import OmegaConf
 
 from ..geometry.wrappers import Camera
 
@@ -271,6 +269,7 @@ def compute_image_grad(img: torch.Tensor, ksize: int = 7, sigma: float = 1.0):
 
     return gradangle
 
+
 def compute_lsd_image_gradient(in_tensor: torch.Tensor) -> torch.Tensor:
     device = in_tensor.device
 
@@ -280,7 +279,7 @@ def compute_lsd_image_gradient(in_tensor: torch.Tensor) -> torch.Tensor:
     # Apply blur
     in_tensor = blur(in_tensor.to(torch.float64).unsqueeze(0))[0]
 
-    #in_tensor = in_tensor.int()
+    # in_tensor = in_tensor.int()
     com1 = in_tensor[1:, 1:] - in_tensor[:-1, :-1]
     com2 = in_tensor[:-1, 1:] - in_tensor[1:, :-1]
 
@@ -299,13 +298,18 @@ def compute_lsd_image_gradient(in_tensor: torch.Tensor) -> torch.Tensor:
     # atan2(-gx, gy) for pixels where norm > threshold
     angle_vals = torch.atan2(-gx[mask], gy[mask])
     epsilon = 1e-9
-    angle_vals[torch.isclose(angle_vals, torch.tensor(torch.pi).to(torch.float64), atol=epsilon)] = -torch.pi
+    angle_vals[
+        torch.isclose(
+            angle_vals, torch.tensor(torch.pi).to(torch.float64), atol=epsilon
+        )
+    ] = -torch.pi
 
     # Insert angles back in output angle tensor
     out_angle = -1024 * (torch.ones(in_tensor.shape).to(device).to(torch.float64))
     out_angle[1:, 1:][mask] = angle_vals
 
     return out, out_angle
+
 
 def extract_non_zero_points(gradnorm, amount=-1):
     positions = np.argwhere(gradnorm > 0)
@@ -323,7 +327,10 @@ def extract_non_zero_points(gradnorm, amount=-1):
 
     return points
 
-def extract_non_zero_points_sorted_by_gradient(gradnorm: torch.Tensor, amount: int = -1) -> torch.Tensor:
+
+def extract_non_zero_points_sorted_by_gradient(
+    gradnorm: torch.Tensor, amount: int = -1
+) -> torch.Tensor:
     # Find positions where gradnorm > 0
     positions = torch.nonzero(gradnorm > 0, as_tuple=False)
 
@@ -347,12 +354,14 @@ def extract_non_zero_points_sorted_by_gradient(gradnorm: torch.Tensor, amount: i
     return points
 
 
-def extract_all_points_sorted_by_gradient(gradient: torch.Tensor, percentile: float = 75.0):
+def extract_all_points_sorted_by_gradient(
+    gradient: torch.Tensor, percentile: float = 75.0
+):
     """
     Extract points sorted by gradient intensity, then keep only those
     whose distance from the center is greater than the average distance
     and whose intensity is above a given percentile.
-    
+
     Args:
         gradient (torch.Tensor): 2D gradient map [H, W].
         percentile (float): intensity percentile (e.g. 90 => top 10%).
@@ -364,7 +373,9 @@ def extract_all_points_sorted_by_gradient(gradient: torch.Tensor, percentile: fl
     rows = torch.arange(gradient.size(0), device=gradient.device)
     cols = torch.arange(gradient.size(1), device=gradient.device)
     grid_y, grid_x = torch.meshgrid(rows, cols, indexing="ij")
-    positions = torch.stack([grid_y.reshape(-1), grid_x.reshape(-1)], dim=1)  # [num_points, 2]
+    positions = torch.stack(
+        [grid_y.reshape(-1), grid_x.reshape(-1)], dim=1
+    )  # [num_points, 2]
 
     # --- Extract intensities ---
     intensities = gradient[positions[:, 0], positions[:, 1]]

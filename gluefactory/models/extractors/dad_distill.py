@@ -2,11 +2,11 @@
 The code comes from: https://github.com/Parskatt/dad
 """
 
+import dad
 import torch
 
 from ..base_model import BaseModel
 
-import dad
 
 class DadDistillDetector(BaseModel):
     default_conf = {
@@ -15,11 +15,11 @@ class DadDistillDetector(BaseModel):
 
     def is_initialized(self):
         return True
-    
+
     def _init(self, conf):
         self.dad_light_detector = dad.load_DaDLight()
         self.dad_black_detector = dad.load_DaDDark()
-        
+
         self.max_num_keypoints = conf.max_num_keypoints
 
         if self.max_num_keypoints == None:
@@ -29,7 +29,7 @@ class DadDistillDetector(BaseModel):
         # See dad.py to implement a similar function
         raise NotImplementedError
 
-    # Returns the KL divergence between the current network we are teaching and the 
+    # Returns the KL divergence between the current network we are teaching and the
     def get_kl_divergence(self, batch, scoremap_student):
         p_teachers = []
         with torch.inference_mode():
