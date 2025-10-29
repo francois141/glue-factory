@@ -274,23 +274,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
             self.superpoint_model.eval()
 
-    def _forward(self, data: dict) -> torch.Tensor:
-        """
-        Perform a forward pass. Certain things are only executed NOT in training mode.
-        Returned:
-            - Probabilistic Keypoint Heatmap
-            - Detected Keypoints
-            - Keypoint descriptors (sparse, do one for every detected keypoint)
-            - DeepLSD like Distance field (denormalized)
-            - DeepLSD like Angle Field (between -Pi and Pi as radians)
-            - Detected Lines (if line detection activated)
-        """
-        # output container definition
-        output = {}
 
-        # pad image
-        image = data["image"]
-        div_by = 2**5
+    def _compute_dense_features(self, image: torch.Tensor):
+        """Compute dense features from image. Return backbone feature map and keypoint score map"""
+        div_by = 2 ** 5
         padder = InputPadder(image.shape[-2], image.shape[-1], div_by)
 
         # Get Hidden Feature Map and Keypoint/junction scoring
@@ -312,12 +299,29 @@ class JointPointLineDetectorDescriptor(BaseModel):
             feature_map_padded, p=2, dim=1
         )
         feature_map = padder.unpad(feature_map_padded_normalized)
-        logger.debug(
-            f"Image size: {image.shape}\nFeatureMap-unpadded: {feature_map.shape}\nFeatureMap-padded: {feature_map_padded.shape}"
-        )
         keypoint_and_junction_score_map = padder.unpad(
             score_map_padded
         )  # B x 1 x H x W
+
+        return keypoint_and_junction_score_map, feature_map
+
+    def _forward(self, data: dict) -> torch.Tensor:
+        """
+        Perform a forward pass. Certain things are only executed NOT in training mode.
+        Returned:
+            - Probabilistic Keypoint Heatmap
+            - Detected Keypoints
+            - Keypoint descriptors (sparse, do one for every detected keypoint)
+            - DeepLSD like Distance field (denormalized)
+            - DeepLSD like Angle Field (between -Pi and Pi as radians)
+            - Detected Lines (if line detection activated)
+        """
+        # output container definition
+        output = {}
+
+        # pad image
+        image = data["image"]
+        keypoint_and_junction_score_map, feature_map = self._compute_dense_features(image)
 
         # Used to visualise the intermediate backbone using PCA
         output["backbone"] = feature_map
@@ -365,7 +369,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             output["keypoints_raw"] = keypoints
 
         _, _, h, w = image.shape
-        wh = torch.tensor([w, h], device=image.device)
+        wh = torch.tensor([w - 1, h - 1], device=image.device)
         # no padding required, can set detection_threshold=-1 and conf.max_num_keypoints -> HERE WE SET THESE VALUES
         # SO WE CAN EXPECT SAME NUM!
         rescaled_kp = wh * (torch.stack(keypoints) + 1.0) / 2.0
@@ -785,6 +789,24 @@ class JointPointLineDetectorDescriptor(BaseModel):
         with torch.no_grad():
             descriptors = self.aliked_lw(pred)
 
+        return descriptors
+
+    def sample_descriptors(self, torch_image, torch_points):
+        """
+        Performs forward pass to get feature map and computes descriptors for given points using SDDH.
+
+        Takes
+         - image as torch tensor Shape non grayscale, normalized [B, C, H, W]
+         - tensor of points Shape [1, N, 2] and computes descriptors for them.
+        Return: the descriptor of each endpoints of shape [256, N*2]
+        """
+
+        _, feat_map = self._compute_dense_features(torch_image)
+        # transform kp tom expected format
+        b, c, h, w = torch_image.shape
+        wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
+        keypoints = torch_points / wh * 2 - 1  # (w,h) -> (-1~1,-1~1)
+        descriptors = self.sddh(feat_map, keypoints)
         return descriptors
 
     def load_pretrained_aliked_elements(self) -> None:

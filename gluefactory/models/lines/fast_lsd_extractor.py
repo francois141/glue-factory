@@ -32,7 +32,7 @@ class FastLSDLineExtractor(BaseModel):
         "sigma": 0.6,
         "threshold_value": 5.2262518595055063,
         "kernel_size": 7,
-        "lsd_type": "default",
+        "lsd_type": "point", # point is the best one currently
     }
     required_data_keys = ["image"]
 
