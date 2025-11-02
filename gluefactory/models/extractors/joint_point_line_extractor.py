@@ -319,8 +319,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # output container definition
         output = {}
 
-        # pad image
-        image = data["image"]
+        # load image and convert gray scale image to 3 channel image to work with the model
+        image = data["image"]  # B x C x H, W
+        b, c, h, w = image.shape
+        if c == 1:
+            image = image.repeat(1, 3, 1, 1)
+
         keypoint_and_junction_score_map, feature_map = self._compute_dense_features(image)
 
         # Used to visualise the intermediate backbone using PCA
@@ -368,7 +372,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ):
             output["keypoints_raw"] = keypoints
 
-        _, _, h, w = image.shape
         wh = torch.tensor([w - 1, h - 1], device=image.device)
         # no padding required, can set detection_threshold=-1 and conf.max_num_keypoints -> HERE WE SET THESE VALUES
         # SO WE CAN EXPECT SAME NUM!
