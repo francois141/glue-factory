@@ -36,8 +36,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
     default_conf = {
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
         "aliked_model_name": "aliked-n16",  # ALIKED model determining architecture of our backbone
-        "line_df_decoder_channels": 32,
-        "max_num_keypoints": 1024,  # setting for training, for eval: -1
+        "line_df_decoder_channels": 64,
+        "max_num_keypoints": 2048,  # setting for training, for eval: -1
         "detection_threshold": -1,  # setting for training, for eval: 0.2
         "nms_radius": 3,
         "subpixel_refinement": True,  # perform subpixel refinement after detection
