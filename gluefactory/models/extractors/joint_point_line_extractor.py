@@ -31,7 +31,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
     # Default checkpoint used for automatic weight loading if no other path specified
     # Here use best checkpoint as stored in the gluefactory repository
-    jpl_default_checkpoint_url = "assets/jpl_best.tar"
+    jpl_default_checkpoint_url = "https://polybox.ethz.ch/index.php/s/3RsiGF3RF3qHbG4/download/jpl_best_with_points.tar"
 
     default_conf = {
         "backbone": "aliked",  # backbone encoder to use, options: aliked - vit
