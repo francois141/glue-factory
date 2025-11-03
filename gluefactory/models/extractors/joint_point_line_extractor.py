@@ -803,10 +803,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
          - tensor of points Shape [1, N, 2] and computes descriptors for them.
         Return: the descriptor of each endpoints of shape [256, N*2]
         """
-
+        # extend in case of grayscale
+        b, c, h, w = torch_image.shape
+        if c == 1:
+            torch_image = torch_image.repeat(1, 3, 1, 1)
         _, feat_map = self._compute_dense_features(torch_image)
         # transform kp tom expected format
-        b, c, h, w = torch_image.shape
         wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
         keypoints = torch_points / wh * 2 - 1  # (w,h) -> (-1~1,-1~1)
         descriptors = self.sddh(feat_map, keypoints)
