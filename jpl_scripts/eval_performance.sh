@@ -26,6 +26,10 @@ echo "Profiling JPL"
 
 python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_eval/jpl.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/jpl_gpu.txt"
 
+echo "Profiling Wireframe (suarez)"
+
+python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_eval/wireframe.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/suarez_gpu.txt"
+
 echo "Profiling DeepLSD + Aliked"
 
 python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_eval/aliked+deeplsd.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/aliked+deeplsd_gpu.txt"
@@ -33,7 +37,6 @@ python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_
 echo "Profiling DeepLSD + Superpoint"
 
 python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_eval/superpoint+deeplsd.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/superpoint+deeplsd_gpu.txt"
-
 
 echo "Profiling DaD + ScaleLSD"
 
