@@ -147,7 +147,7 @@ class DeepLSD(BaseModel):
         gradnorm = np.maximum(5 - df, 0).astype(np.float64)
         img_grad_angle = None
         if use_img_grad_angle:
-            img_grad_angle = compute_image_grad(img)[3]
+            img_grad_angle = compute_image_grad(torch.tensor(img)).cpu().detach().numpy()
             angle = np.mod(img_grad_angle - np.pi / 2, 2 * np.pi)
         else:
             angle = line_level.astype(np.float64) - np.pi / 2
