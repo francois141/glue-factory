@@ -811,7 +811,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         # transform kp tom expected format
         wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
         keypoints = torch_points / wh * 2 - 1  # (w,h) -> (-1~1,-1~1)
-        descriptors = self.sddh(feat_map, keypoints)
+        descriptors = self.descriptor_branch(feat_map, keypoints)
         return descriptors
 
     def load_pretrained_aliked_elements(self) -> None:
