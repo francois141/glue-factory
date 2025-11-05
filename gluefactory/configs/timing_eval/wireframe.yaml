@@ -6,9 +6,10 @@ data:
     split: 'val'  # split must be selected 
     grayscale: False
     num_workers: 1
+    train_batch_size: 1
     val_batch_size: 1
     prefetch_factor: 1
-    reshape: 800  
+    reshape: [800, 800]
     square_pad: False
     multiscale_learning:
         do: False  
