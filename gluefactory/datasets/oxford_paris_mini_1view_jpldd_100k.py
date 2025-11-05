@@ -458,7 +458,7 @@ class _Dataset(torch.utils.data.Dataset):
             return original_img_size
 
         if do_reshape:
-            return int(self.conf.reshape)
+            return self.conf.reshape
 
         if do_ms_learning:
             if self.do_change_size_now():
