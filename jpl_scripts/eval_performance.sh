@@ -20,7 +20,7 @@ OUTPUT_DIR=$DIR/eval/performance
 lscpu > "${OUTPUT_DIR}/cpu.txt"
 nvidia-smi -q > "${OUTPUT_DIR}/gpu.txt"
 
-NUMER_RUNS_GPU=100
+NUMER_RUNS_GPU=500
 
 echo "Profiling JPL"
 
@@ -46,20 +46,20 @@ echo "Running measurements for ablations"
 
 echo "Running DeepLSD with AF"
 
-python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/deeplsd+AF+LM.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_deeplsd_af.txt"
+python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lines_only_deeplsd+AF.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_deeplsd_af.txt"
 
 echo "Running DeepLSD without AF"
 
-python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/deeplsd+LM.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_deeplsd_without_af.txt"
+python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lines_only_deeplsd.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_deeplsd_without_af.txt"
 
 echo "Running LSD"
 
-python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lsd+LM.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_lsd.txt"
+python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lines_only_lsd.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_lsd.txt"
 
 echo "Running fast LSD"
 
-python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/fastlsd+LM.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_fast_lsd.txt"
+python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lines_only_fastlsd.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_fast_lsd.txt"
 
 echo "Running gpu LSD"
 
-python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lsd_points+LM.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_gpu_lsd.txt"
+python -m gluefactory.eval.timing_measurement --conf gluefactory/configs/timing_eval/lines_only_lsd_points.yaml --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/ablation_gpu_lsd.txt"
