@@ -407,6 +407,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             pred_line_data = self.line_extractor(line_data)
 
             output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
+            # TODO: Line descriptors are not implemented or returned by fast-line extractor
             if self.conf.line_detection.conf.return_line_descriptors:
                 output["line_descriptors"] = torch.stack(
                     pred_line_data["line_descriptors"], dim=0

@@ -42,6 +42,7 @@ class FastLSDLineExtractor(BaseModel):
                 self.conf.max_num_lines is not None
             ), "Missing max_num_lines parameter"
         # currently line descriptors arte not implemented
+        # TODO: remove not implemented option
         if self.conf.return_line_descriptors:
             raise NotImplementedError(
                 "Line descriptors are not implemented yet for FasterLSD"

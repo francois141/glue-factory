@@ -1,42 +1,26 @@
-import argparse
-import time
-from pathlib import Path
-
-import cv2
-import matplotlib
-import numpy as np
 import torch
-from faster_pytlsd import lsd as fast_lsd
 from faster_pytlsd import params_lsd
-from joblib import Parallel, delayed
-from matplotlib import pyplot as plt
-from PIL import Image
-from pytlsd import lsd, lsd_from_points, lsd_opt
 from wireframe_distillation.wireframe_net import WireframeNet
-
-from gluefactory.utils.image import (
-    compute_lsd_image_gradient,
-    extract_non_zero_points_sorted_by_gradient,
-)
 
 from ...settings import DATA_PATH
 from ..base_model import BaseModel
+
+
+def download_model(path):
+    import subprocess
+
+    if not path.parent.is_dir():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    link = "https://raw.githubusercontent.com/iferfra/wireframe-detector/main/checkpoints/checkpoint.pth"
+    cmd = ["wget", link, "-O", path]
+    print("Downloading Wireframe model...")
+    subprocess.run(cmd, check=True)
 
 
 class WireframeSuarez(BaseModel):
     default_conf = {}
 
     required_data_keys = ["image"]
-
-    def download_model(self, path):
-        import subprocess
-
-        if not path.parent.is_dir():
-            path.parent.mkdir(parents=True, exist_ok=True)
-        link = "https://raw.githubusercontent.com/iferfra/wireframe-detector/main/checkpoints/checkpoint.pth"
-        cmd = ["wget", link, "-O", path]
-        print("Downloading ScaleLSD model...")
-        subprocess.run(cmd, check=True)
 
     def _init(self, conf):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +29,7 @@ class WireframeSuarez(BaseModel):
 
         ckpt = DATA_PATH / "weights" / self.model_name
         if not ckpt.is_file():
-            self.download_model(ckpt)
+            download_model(ckpt)
 
         config = {"weights": ckpt, "size": [800, 800]}
 
@@ -62,7 +46,7 @@ class WireframeSuarez(BaseModel):
             "descriptors": results["descriptors"],
         }
 
-    def loss(self):
+    def loss(self, pred, data):
         raise NotImplementedError
 
     def is_initialized(self):
