@@ -27,7 +27,6 @@ class FastLSDLineExtractor(BaseModel):
         "grad_nfa": True,
         "filtering": "normal",
         "grad_thresh": 3,
-        "return_line_descriptors": False,
         "trainable": False,
         "sigma": 0.6,
         "threshold_value": 5.2262518595055063,
@@ -41,23 +40,16 @@ class FastLSDLineExtractor(BaseModel):
             assert (
                 self.conf.max_num_lines is not None
             ), "Missing max_num_lines parameter"
-        # currently line descriptors arte not implemented
-        # TODO: remove not implemented option
-        if self.conf.return_line_descriptors:
-            raise NotImplementedError(
-                "Line descriptors are not implemented yet for FasterLSD"
-            )
 
         # Currently we have 5 types of lsd entries
         assert self.conf.lsd_type in ["default", "old", "best", "fast", "point"]
 
-    def detect_lines(self, img, df, line_level=None):
+    def detect_lines(self, img, df):
         """
         detect lines in one image.
         Args:
             img: image as numpy array
             df: denormalized distance field as numpy array
-            line_level: line anglefield / line level as numpy array. Not needed if conf.use_img_grad_angle is True.
         Returns: numpy array containing lines as (x1, y1 \\ x2, y2) tuples so of shape (n_lines, 2, 2)
         """
         # Run LSD
@@ -161,29 +153,28 @@ class FastLSDLineExtractor(BaseModel):
         """
         # Convert to the right data format
         image = data["image"]
-        line_level = data["line_anglefield"]
         line_df_denormalized = data["line_distancefield"]
 
         # preprocess input to lsd
         image = (image[:, 0] * 255).to(torch.uint8)
 
-        def process_one(img, df, ll):
-            line_pred = self.detect_lines(img, df, ll)
+        def process_one(img, df):
+            line_pred = self.detect_lines(img, df)
             return line_pred["lines"], line_pred["valid_lines"]
 
         results = []
 
         if len(image) == 1:
             results.append(
-                process_one(image[0], line_df_denormalized[0], line_level[0])
+                process_one(image[0], line_df_denormalized[0])
             )
         else:
             from concurrent.futures import ThreadPoolExecutor
 
             with ThreadPoolExecutor() as executor:
                 futures = [
-                    executor.submit(process_one, img, df, ll)
-                    for img, df, ll in zip(image, line_df_denormalized, line_level)
+                    executor.submit(process_one, img, df)
+                    for img, df in zip(image, line_df_denormalized)
                 ]
                 for f in futures:
                     results.append(f.result())

@@ -79,6 +79,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "line_detection": {  # by default we use the POLD2 Line Extractor (MLP with Angle Field)
             "do": True,
             "name": "lines.fast_lsd_extractor",
+            "return_line_descriptors": False,
             "conf": FastLSDLineExtractor.default_conf,
         },
         "checkpoint": jpl_default_checkpoint_url,  # if given and non-null, load model checkpoint if local path load locally if standard url download it.
@@ -392,26 +393,58 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
         if self.conf.line_detection.do and not self.training:
-            if output.get("line_anglefield", None) is None:
-                # create dummy so that zipping works
-                line_angle_field = torch.zeros_like(line_distance_field)
+            if b > 1:
+                # Need to assume equal size outputs so stacking and efficient line-descr comp work.
+                assert self.conf.line_detection.conf.max_num_lines is not None
+                assert self.conf.line_detection.conf.force_num_lines
 
             # Perform forward pass for line detector, batching handled internally
             line_data = {
-                "line_anglefield": line_angle_field,
                 "line_distancefield": line_distance_field,
                 "image": image,
                 "keypoints": rescaled_kp,
                 "kp_descriptors": output["descriptors"],
             }
-            pred_line_data = self.line_extractor(line_data)
+            pred_line_data = self.line_extractor(line_data) # list of lines for each image in the batch
 
             output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
-            # TODO: Line descriptors are not implemented or returned by fast-line extractor
-            if self.conf.line_detection.conf.return_line_descriptors:
-                output["line_descriptors"] = torch.stack(
-                    pred_line_data["line_descriptors"], dim=0
-                )
+
+            # If extracting line descriptors is activated - extract line endpoint descriptors
+            if self.conf.line_detection.return_line_descriptors:
+                # Get lines and valid mask
+                lines = output["lines"]  # [B, N_lines, 2, 2]
+                valid_lines = torch.stack(pred_line_data["valid_lines"], dim=0)  # [B, N_lines]
+                b, n_lines, _, _ = lines.shape
+
+                line_endpoints_list = []
+                for i in range(b):
+                    # Filter to only valid lines for this batch item
+                    valid_mask_i = valid_lines[i]  # [N_lines]
+                    valid_lines_i = lines[i][valid_mask_i]  # [N_valid, 2, 2]
+                    # Reshape to endpoints [N_valid*2, 2], Normalize to (-1, 1) space
+                    line_endpoints_list.append(valid_lines_i.reshape(-1, 2) / wh * 2.0 - 1.0)
+
+                # Compute descriptors only for valid endpoints
+                if self.conf.descriptor_branch == "aliked":
+                    valid_descriptors_list, _ = self.descriptor_branch(feature_map, line_endpoints_list)
+                    # Reconstruct full descriptor tensor with zeros for invalid lines
+                    descriptor_dim = valid_descriptors_list[0].shape[-1]  # D
+                    full_line_descriptors = torch.zeros(
+                        b, n_lines * 2, descriptor_dim,
+                        device=lines.device,
+                        dtype=valid_descriptors_list[0].dtype
+                    )
+
+                    # Fill in valid descriptors
+                    for i in range(b):
+                        endpoint_mask = valid_lines[i].repeat_interleave(2)  # Each line has 2 endpoints
+                        full_line_descriptors[i, endpoint_mask] = valid_descriptors_list[i]
+
+                    # Reshape to [B, N_lines, 2, D] to keep endpoints grouped per line
+                    output["line_descriptors"] = full_line_descriptors.reshape(b, n_lines, 2, descriptor_dim)
+                else:
+                    raise NotImplementedError("Do not support Line Descriptors from DeDoDe")
+
             output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
 
         return output
