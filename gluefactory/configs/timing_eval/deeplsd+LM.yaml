@@ -1,0 +1,26 @@
+model:
+    name: lines.deeplsd
+    model_conf:
+        detect_lines: True
+        line_detection_params:
+            use_img_grad_angle: True
+            merge: False
+            grad_nfa: True
+            filtering: True  # True or strict
+            faster_lsd: False
+data:
+    name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
+    data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
+    split: 'val'  # split must be selected
+    grayscale: False
+    num_workers: 1
+    val_batch_size: 16
+    prefetch_factor: 1
+    reshape: 800
+    square_pad: True
+    multiscale_learning:
+        do: False
+    load_features:
+        do: False
+    val_size: 500
+    train_size: 11500
