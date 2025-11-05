@@ -1,9 +1,10 @@
 model:
     name: extractors.dad+scalelsd
+    max_num_keypoints: 2048
 data:
     name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
     data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
-    split: 'train'  # split must be selected
+    split: 'val'  # split must be selected
     grayscale: False
     num_workers: 1
     val_batch_size: 1

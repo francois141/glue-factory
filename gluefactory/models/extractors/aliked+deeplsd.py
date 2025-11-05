@@ -15,7 +15,11 @@ from ..base_model import BaseModel
 
 
 class AlikedDeepLSD(BaseModel):
-    default_conf = {}
+    default_conf = {
+        "max_num_keypoints": 1024,
+        "detection_threshold": 0,
+        "force_num_keypoints": True,
+    }
 
     def is_initialized(self):
         return True
@@ -24,9 +28,9 @@ class AlikedDeepLSD(BaseModel):
         self.deeplsd = DeepLSD({}).eval()
         self.aliked = ALIKED(
             {
-                "max_num_keypoints": 1024,
-                "detection_threshold": 0,
-                "force_num_keypoints": True,
+                "max_num_keypoints": conf.max_num_keypoints,
+                "detection_threshold": conf.detection_threshold,
+                "force_num_keypoints": conf.force_num_keypoints,
             }
         ).eval()
 

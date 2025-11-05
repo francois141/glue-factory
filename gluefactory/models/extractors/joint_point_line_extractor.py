@@ -24,13 +24,28 @@ logger = logging.getLogger(__file__)
 
 class JointPointLineDetectorDescriptor(BaseModel):
     """
-    Pipeline to jointly detect and describe keypoints and lines given an RGB image.
+    Joint Point-Line Detector and Descriptor model for simultaneous detection and description
+    of keypoints and lines in images.
 
-    If a checkpoint is loaded, the config from the checkpoint is not. We could change that in the future.
+    This model combines keypoint detection (inspired by ALIKED) with line detection (using LSD-based methods)
+    in a unified architecture. It supports both training and inference modes with configurable loss functions
+    and feature descriptors.
+
+    Features:
+        - Keypoint detection with subpixel refinement and NMS
+        - Line detection via distance field prediction and LSD extraction
+        - Sparse descriptors for both keypoints and line endpoints
+        - Support for RGB and grayscale images (grayscale converted via channel repetition)
+        - Training with one-view and two-view losses
+        - Flexible descriptor branches (ALIKED or DeDoDe)
+
+    The model outputs dense and sparse features including keypoint heatmaps, detected keypoints
+    with descriptors, line distance fields, and optionally detected lines with descriptors.
+
+    Note:
+        If a checkpoint is loaded, the config from the checkpoint is not used but must match the defined config.
     """
 
-    # Default checkpoint used for automatic weight loading if no other path specified
-    # Here use best checkpoint as stored in the gluefactory repository
     jpl_default_checkpoint_url = "https://polybox.ethz.ch/index.php/s/3RsiGF3RF3qHbG4/download/jpl_best_with_points.tar"
 
     default_conf = {
@@ -306,18 +321,38 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         return keypoint_and_junction_score_map, feature_map
 
-    def _forward(self, data: dict) -> torch.Tensor:
+    def _forward(self, data: dict) -> dict:
         """
-        Perform a forward pass. Certain things are only executed NOT in training mode.
-        Returned:
-            - Probabilistic Keypoint Heatmap
-            - Detected Keypoints
-            - Keypoint descriptors (sparse, do one for every detected keypoint)
-            - DeepLSD like Distance field (denormalized)
-            - DeepLSD like Angle Field (between -Pi and Pi as radians)
-            - Detected Lines (if line detection activated)
+        Forward pass for joint keypoint and line detection/description. Accepts RGB or grayscale images.
+        Line detection only runs in inference mode.
+
+        Args:
+            data: Dict with 'image' [B, C, H, W] where C=1 (grayscale) or C=3 (RGB)
+
+        Returns:
+            dict with outputs:
+
+            Always present:
+                - 'backbone': Feature map [B, D, H', W']
+                - 'keypoint_and_junction_score_map': Keypoint heatmap [B, H, W]
+                - 'line_distancefield': Line distance field [B, H, W] in pixels
+                - 'keypoints': Keypoint coords [B, N_kp, 2] in pixel space [0, W-1] x [0, H-1]
+                - 'keypoint_scores': Scores [B, N_kp]
+                - 'keypoint_dispersity': Dispersity [B, N_kp]
+                - 'descriptors': Keypoint descriptors [B, N_kp, D]
+
+            Training only (if conf.training.train_descriptors.use_one_view_loss):
+                - 'keypoints_raw': List of [N_kp_i, 2] in normalized coords [-1, 1]
+
+            Inference only (if conf.line_detection.do and not training):
+                - 'lines': Lines [B, N_lines, 2, 2] if batched, else list of [N_lines_i, 2, 2]
+                - 'valid_lines': Boolean mask [B, N_lines] if batched, else list of [N_lines_i]
+                - 'line_descriptors': (if return_line_descriptors=True) [B, N_lines, 2, D] if batched,
+                  else list of [N_lines_i, 2, D]. Invalid lines have zero descriptors.
+
+            Note: Lines are batched only when B==1 or force_num_lines=True, else lists.
         """
-        # output container definition
+        #TODO: might want to support return list of tensors of for kp related data (currently assume same num, which will not be case when not fix num kp)
         output = {}
 
         # load image and convert gray scale image to 3 channel image to work with the model
@@ -393,11 +428,6 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
         if self.conf.line_detection.do and not self.training:
-            if b > 1:
-                # Need to assume equal size outputs so stacking and efficient line-descr comp work.
-                assert self.conf.line_detection.conf.max_num_lines is not None
-                assert self.conf.line_detection.conf.force_num_lines
-
             # Perform forward pass for line detector, batching handled internally
             line_data = {
                 "line_distancefield": line_distance_field,
@@ -407,15 +437,20 @@ class JointPointLineDetectorDescriptor(BaseModel):
             }
             pred_line_data = self.line_extractor(line_data) # list of lines for each image in the batch
 
-            output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
+            lines = pred_line_data["lines"] # array - one tensor per img, shape: [N_lines, 2, 2]
+            valid_lines = pred_line_data["valid_lines"] # array - one tensor per img, shape: [N_lines]
+            is_batched = False
+            # batch if possible
+            if b == 1 or self.conf.line_detection.conf.force_num_lines:
+                lines = torch.stack(lines, dim=0) # [B, N_lines, 2, 2]
+                valid_lines = torch.stack(valid_lines, dim=0) # [B, N_lines]
+                is_batched = True
+            output["lines"] = lines
+            output["valid_lines"] = valid_lines
 
             # If extracting line descriptors is activated - extract line endpoint descriptors
             if self.conf.line_detection.return_line_descriptors:
-                # Get lines and valid mask
-                lines = output["lines"]  # [B, N_lines, 2, 2]
-                valid_lines = torch.stack(pred_line_data["valid_lines"], dim=0)  # [B, N_lines]
-                b, n_lines, _, _ = lines.shape
-
+                # collect endpoints for valid lines only
                 line_endpoints_list = []
                 for i in range(b):
                     # Filter to only valid lines for this batch item
@@ -424,29 +459,33 @@ class JointPointLineDetectorDescriptor(BaseModel):
                     # Reshape to endpoints [N_valid*2, 2], Normalize to (-1, 1) space
                     line_endpoints_list.append(valid_lines_i.reshape(-1, 2) / wh * 2.0 - 1.0)
 
-                # Compute descriptors only for valid endpoints
+                # Compute descriptors
                 if self.conf.descriptor_branch == "aliked":
-                    valid_descriptors_list, _ = self.descriptor_branch(feature_map, line_endpoints_list)
-                    # Reconstruct full descriptor tensor with zeros for invalid lines
-                    descriptor_dim = valid_descriptors_list[0].shape[-1]  # D
-                    full_line_descriptors = torch.zeros(
-                        b, n_lines * 2, descriptor_dim,
-                        device=lines.device,
-                        dtype=valid_descriptors_list[0].dtype
-                    )
+                    valid_descriptors_list, _ = self.descriptor_branch(feature_map, line_endpoints_list) # gives array of tensors, shape: [N_points, D]
+                    if not is_batched:
+                        # if not batched just reshape and return array with tensor for each img [n_lines, 2, 2]
+                        for i in range(b):
+                            valid_descriptors_list[i] = valid_descriptors_list[i].reshape(-1, 2, 2)
+                        output["line_descriptors"] = valid_descriptors_list
+                    else:
+                        # If batched, stack valid descriptors while setting non-valid to zero
+                        descriptor_dim = valid_descriptors_list[0].shape[-1]  # D
+                        n_lines = lines.shape[1]
+                        full_line_descriptors = torch.zeros(
+                            b, n_lines * 2, descriptor_dim,
+                            device=lines.device,
+                            dtype=valid_descriptors_list[0].dtype
+                        )
 
-                    # Fill in valid descriptors
-                    for i in range(b):
-                        endpoint_mask = valid_lines[i].repeat_interleave(2)  # Each line has 2 endpoints
-                        full_line_descriptors[i, endpoint_mask] = valid_descriptors_list[i]
+                        # Fill in valid descriptors
+                        for i in range(b):
+                            endpoint_mask = valid_lines[i].repeat_interleave(2)  # Each line has 2 endpoints
+                            full_line_descriptors[i, endpoint_mask] = valid_descriptors_list[i]
 
-                    # Reshape to [B, N_lines, 2, D] to keep endpoints grouped per line
-                    output["line_descriptors"] = full_line_descriptors.reshape(b, n_lines, 2, descriptor_dim)
+                        # Reshape to [B, N_lines, 2, D] to keep endpoints grouped per line
+                        output["line_descriptors"] = full_line_descriptors.reshape(b, n_lines, 2, descriptor_dim)
                 else:
                     raise NotImplementedError("Do not support Line Descriptors from DeDoDe")
-
-            output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
-
         return output
 
     def loss(self, pred: dict, data: dict) -> dict:

@@ -1,5 +1,5 @@
-"""Gluefactory port of DAD point detector
-The code comes from: https://github.com/Parskatt/dad
+"""
+Wrapper for joint point and line detection with dad and scalelsd.
 """
 
 import torch
@@ -11,13 +11,17 @@ from ..base_model import BaseModel
 
 
 class DaDScaleLSD(BaseModel):
-    default_conf = {}
+    default_conf = {
+        "max_num_keypoints": 1024
+    }
 
     def is_initialized(self):
         return True
 
     def _init(self, conf):
-        self.dad_detector = DadDetector({}).eval()
+        self.dad_detector = DadDetector({
+            "max_num_keypoints": conf.max_num_keypoints
+        }).eval()
         self.scalelsd_detector = ScaleLSD({}).eval()
 
     def _forward(self, data):

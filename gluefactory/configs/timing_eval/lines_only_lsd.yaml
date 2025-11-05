@@ -7,10 +7,10 @@ data:
   split: 'val'  # split must be selected
   grayscale: False
   num_workers: 1
-  val_batch_size: 16
+  val_batch_size: 1
   prefetch_factor: 1
   reshape: 800
-  square_pad: True
+  square_pad: False
   multiscale_learning:
     do: False
   load_features:

@@ -1,6 +1,5 @@
 model:
     name: extractors.joint_point_line_extractor
-    aliked_model_name: "aliked-n16"
     max_num_keypoints: 2048  # setting for training, for eval: -1
     line_df_decoder_channels: 64  # adapt to your checkpoint!!
     nms_radius: 3
@@ -10,12 +9,13 @@ model:
     checkpoint:  assets/jpl_best_with_points.tar
     line_detection:
       do: True
+      return_line_descriptors: False
       conf:
         lsd_type: point
 data:
     name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
     data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
-    split: 'train'  # split must be selected
+    split: 'val'  # split must be selected
     grayscale: False
     num_workers: 1
     val_batch_size: 1
