@@ -873,8 +873,8 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         Takes
          - image as torch tensor Shape non grayscale, normalized [B, C, H, W]
-         - tensor of points Shape [1, N, 2] and computes descriptors for them.
-        Return: the descriptor of each endpoints of shape [256, N*2]
+         - tensor of points Shape [B, N_b, 2] and computes descriptors for them.
+        Return: array, descriptors of each img, shape [N_b, 128] for each
         """
         # extend in case of grayscale
         b, c, h, w = torch_image.shape
