@@ -47,19 +47,16 @@ def export_predictions(
                 scales = 1.0 / (
                     data["scales"] if len(idx) == 0 else data[f"view{idx}"]["scales"]
                 )
-                pred[k] = torch.tensor(pred[k]).to(device) * scales[None].to(device)
-            if k.startswith("lines"):
-                idx = k.replace("lines", "")
-                scales = 1.0 / (
-                    data["scales"] if len(idx) == 0 else data[f"view{idx}"]["scales"]
-                )
-                pred[k] = pred[k].to(device) * scales[None].to(device)
+                pred[k] = pred[k] * scales[None]
+            if k == "lines":
+                scales = 1.0 / data["scales"]
+                pred["lines"] *= scales[None]
             if k.startswith("orig_lines"):
                 idx = k.replace("orig_lines", "")
                 scales = 1.0 / (
                     data["scales"] if len(idx) == 0 else data[f"view{idx}"]["scales"]
                 )
-                pred[k] = pred[k].to(device) * scales[None].to(device)
+                pred[k] = pred[k] * scales[None]
 
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 

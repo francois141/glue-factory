@@ -3,6 +3,9 @@ import logging
 import torch.nn as nn
 import torch.nn.functional as F
 from kornia.geometry.transform import warp_perspective
+import torch
+import torch.distributed as dist
+import numpy as np
 
 from gluefactory.geometry.kp_losses import soft_argmax_only_loss
 from gluefactory.models import get_model
@@ -80,6 +83,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
             "do": True,
             "name": "lines.fast_lsd_extractor",
             "conf": FastLSDLineExtractor.default_conf,
+            "max_num_lines": 250, # overwrite max num lines in line extractor config
+            "force_num_lines": True, # overwrite force num lines in line extractor config
+            "return_line_descriptors": True, # overwrite return line descriptors in line extractor config
         },
         "checkpoint": jpl_default_checkpoint_url,  # if given and non-null, load model checkpoint if local path load locally if standard url download it.
         "line_neighborhood": 5,  # used to normalize / denormalize line distance field
@@ -269,24 +275,98 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "force_num_keypoints": True
             })
             self.superpoint_model.eval()
+        
+        # print configuration
+        # logger.info("JPL configuration:")
+        # for k, v in self.conf.items():
+        #     logger.info(f"  {k}: {v}")
 
-    def _forward(self, data: dict) -> torch.Tensor:
+    def _filter_and_format_lines(self, segs: np.ndarray):
         """
-        Perform a forward pass. Certain things are only executed NOT in training mode.
-        Returned:
-            - Probabilistic Keypoint Heatmap
-            - Detected Keypoints
-            - Keypoint descriptors (sparse, do one for every detected keypoint)
-            - DeepLSD like Distance field (denormalized)
-            - DeepLSD like Angle Field (between -Pi and Pi as radians)
-            - Detected Lines (if line detection activated)
-        """
-        # output container definition
-        output = {}
+        segs: array of shape (N, 5) or (N, 4) or (N, 6) depending on your line_extractor
+            but we assume:
+                - first 4 entries are endpoints: [x1, y1, x2, y2]
+                - last entry (if present) is a score/probability from detector
 
-        # pad image
-        image = data["image"]
-        div_by = 2**5
+        returns:
+            lines: (M, 2, 2) float32
+            scores: (M,) float32
+            valid_mask: (M,) bool
+        """
+
+        # length filter (same as LSD)
+        if segs is None:
+            segs = np.zeros((0, 2, 2), dtype=np.float32)
+
+        segs = np.array(segs)
+
+        if segs.ndim == 3 and segs.shape[1:] == (2, 2):
+            # Format: (N, 2, 2)
+            # endpoints:
+            pts1 = segs[:, 0, :]   # (N, 2)
+            pts2 = segs[:, 1, :]   # (N, 2)
+            lengths = np.linalg.norm(pts2 - pts1, axis=1)
+            lines = segs.astype(np.float32)
+        elif segs.ndim == 2 and segs.shape[1] >= 4:
+            # Format: (N, 4) or (N, 5)
+            lengths = np.linalg.norm(segs[:, 2:4] - segs[:, 0:2], axis=1)
+            lines = segs[:, :4].reshape(-1, 2, 2).astype(np.float32)
+        else:
+            # unknown / empty format
+            lines = np.zeros((0, 2, 2), dtype=np.float32)
+            lengths = np.zeros((0,), dtype=np.float32)
+
+        to_keep = lengths >= self.conf.line_detection.conf.min_length
+        segs = segs[to_keep]
+        lengths = lengths[to_keep]
+
+        # if extractor already puts the score in the last column, use it,
+        # otherwise create a dummy 1.0 score
+        if segs.shape[1] > 4:
+            raw_scores = segs[:, -1]
+        else:
+            raw_scores = np.ones((segs.shape[0],), dtype=np.float32)
+
+        scores = raw_scores * np.sqrt(lengths)
+
+        # reshape to (n,2,2)
+        lines = segs[:, :4].reshape(-1, 2, 2)
+        indices = np.argsort(-scores)
+
+        max_num = self.conf.line_detection.max_num_lines
+        force_num = self.conf.line_detection.force_num_lines
+
+        if max_num is not None and force_num:
+            indices = indices[:max_num]
+
+        lines = lines[indices]
+        scores = scores[indices]
+
+        # padding
+        n = len(lines)
+        valid_mask = np.ones(n, dtype=bool)
+
+        if force_num and max_num is not None:
+            pad = max_num - n
+            if pad > 0:
+                lines = np.concatenate(
+                    [lines, np.zeros((pad, 2, 2), dtype=np.float32)],
+                    axis=0,
+                )
+                scores = np.concatenate(
+                    [scores, np.zeros((pad,), dtype=np.float32)],
+                    axis=0,
+                )
+                valid_mask = np.concatenate(
+                    [valid_mask, np.zeros((pad,), dtype=bool)],
+                    axis=0,
+                )
+
+        return lines, scores, valid_mask
+
+    def _compute_dense_features(self, image: torch.Tensor):
+        """Compute dense features from image. Return backbone feature map and keypoint score map"""
+        div_by = 2 ** 5
         padder = InputPadder(image.shape[-2], image.shape[-1], div_by)
 
         # Get Hidden Feature Map and Keypoint/junction scoring
@@ -315,9 +395,33 @@ class JointPointLineDetectorDescriptor(BaseModel):
             score_map_padded
         )  # B x 1 x H x W
 
+        return keypoint_and_junction_score_map, feature_map
+
+    def _forward(self, data: dict) -> torch.Tensor:
+        """
+        Perform a forward pass. Certain things are only executed NOT in training mode.
+        Returned:
+            - Probabilistic Keypoint Heatmap
+            - Detected Keypoints
+            - Keypoint descriptors (sparse, do one for every detected keypoint)
+            - DeepLSD like Distance field (denormalized)
+            - DeepLSD like Angle Field (between -Pi and Pi as radians)
+            - Detected Lines (if line detection activated)
+        """
+        # output container definition
+        output = {}
+
+        # pad image
+        image = data["image"]
+        b, c, h, w = image.shape
+        if c == 1:
+            image = image.repeat(1, 3, 1, 1)  # gray to rgb
+        keypoint_and_junction_score_map, feature_map = self._compute_dense_features(image)
+
         # Used to visualise the intermediate backbone using PCA
         output["backbone"] = feature_map
-
+        output["dense_descriptors"] = feature_map
+        
         # For storing, remove additional dimension but keep batch dimension even if its 1
         # but keep additional dimension for variable -> needed by dkd
         if keypoint_and_junction_score_map.shape[0] == 1:
@@ -348,7 +452,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         output["line_distancefield"] = line_distance_field
 
         # Keypoint detection also removes kp at border. it can return topk keypoints or set of thresholded kp.
-        keypoints, _, kptscores = self.dkd(
+        keypoints, kptscores, kpt_dispersity = self.dkd(
             keypoint_and_junction_score_map,
             sub_pixel=bool(self.conf.subpixel_refinement),
         )
@@ -361,12 +465,13 @@ class JointPointLineDetectorDescriptor(BaseModel):
             output["keypoints_raw"] = keypoints
 
         _, _, h, w = image.shape
-        wh = torch.tensor([w, h], device=image.device)
+        wh = torch.tensor([w - 1, h - 1], device=image.device)
         # no padding required, can set detection_threshold=-1 and conf.max_num_keypoints -> HERE WE SET THESE VALUES
         # SO WE CAN EXPECT SAME NUM!
         rescaled_kp = wh * (torch.stack(keypoints) + 1.0) / 2.0
         output["keypoints"] = rescaled_kp
         output["keypoint_scores"] = torch.stack(kptscores)
+        output["keypoint_dispersity"] = torch.stack(kpt_dispersity)
 
         # Keypoint descriptors
         if self.conf.descriptor_branch == "aliked":
@@ -391,13 +496,91 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 "kp_descriptors": output["descriptors"],
             }
             pred_line_data = self.line_extractor(line_data)
+            
+            lines = pred_line_data["lines"] # array - one tensor per img, shape: [N_lines, 2, 2]
+            valid_lines = pred_line_data["valid_lines"] # array - one tensor per img, shape: [N_lines]
+            is_batched = False
+            # batch if possible
+            if b == 1 or self.conf.line_detection.conf.force_num_lines:
+                lines = torch.stack(lines, dim=0) # [B, N_lines, 2, 2]
+                valid_lines = torch.stack(valid_lines, dim=0) # [B, N_lines]
+                is_batched = True
+            output["lines"] = lines
+            output["valid_lines"] = valid_lines
+            
+            processed_lines = []
+            processed_scores = []
+            processed_valid = []
 
-            output["lines"] = torch.stack(pred_line_data["lines"], dim=0)
-            if self.conf.line_detection.conf.return_line_descriptors:
-                output["line_descriptors"] = torch.stack(
-                    pred_line_data["line_descriptors"], dim=0
-                )
-            output["valid_lines"] = torch.stack(pred_line_data["valid_lines"], dim=0)
+            for i, segs in enumerate(output["lines"]):
+                # convert to numpy
+                if isinstance(segs, torch.Tensor):
+                    segs_np = segs.detach().cpu().numpy()
+                    src_type = "torch"
+                else:
+                    segs_np = np.array(segs)
+                    src_type = "np/other"
+
+                lines_np, scores_np, valid_np = self._filter_and_format_lines(segs_np)
+
+                processed_lines.append(lines_np)
+                processed_scores.append(scores_np)
+                processed_valid.append(valid_np)
+
+            # all entries in processed_lines have the same length if force_num_lines=True
+            # so we can stack
+
+            device = image.device
+            output["lines"] = torch.tensor(
+                np.stack(processed_lines, axis=0), dtype=torch.float32, device=device
+            )
+            output["line_scores"] = torch.tensor(
+                np.stack(processed_scores, axis=0), dtype=torch.float32, device=device
+            )
+            output["valid_lines"] = torch.tensor(
+                np.stack(processed_valid, axis=0), dtype=torch.bool, device=device
+            )
+
+            # If extracting line descriptors is activated - extract line endpoint descriptors
+            if self.conf.line_detection.return_line_descriptors:
+                # print(f"Extracting line descriptors using {self.conf.descriptor_branch} branch...")
+                # collect endpoints for valid lines only
+                line_endpoints_list = []
+                for i in range(b):
+                    # Filter to only valid lines for this batch item
+                    valid_mask_i = output["valid_lines"][i]  # [N_lines]
+                    valid_lines_i = output["lines"][i][valid_mask_i]  # [N_valid, 2, 2]
+                    # Reshape to endpoints [N_valid*2, 2], Normalize to (-1, 1) space
+                    line_endpoints_list.append(valid_lines_i.reshape(-1, 2) / wh * 2.0 - 1.0)
+
+                # Compute descriptors
+                if self.conf.descriptor_branch == "aliked":
+                    valid_descriptors_list, _ = self.descriptor_branch(feature_map, line_endpoints_list) # gives array of tensors, shape: [N_points, D]
+                    if not is_batched:
+                        # if not batched just reshape and return array with tensor for each img [n_lines, 2, 2]
+                        for i in range(b):
+                            valid_descriptors_list[i] = valid_descriptors_list[i].reshape(-1, 2, 2)
+                        output["line_descriptors"] = valid_descriptors_list
+                      
+                    else:
+                        # If batched, stack valid descriptors while setting non-valid to zero
+                        descriptor_dim = valid_descriptors_list[0].shape[-1]  # D
+                        n_lines = output["lines"].shape[1]
+                        full_line_descriptors = torch.zeros(
+                            b, n_lines * 2, descriptor_dim,
+                            device=output["lines"].device,
+                            dtype=valid_descriptors_list[0].dtype
+                        )
+
+                        # Fill in valid descriptors
+                        for i in range(b):
+                            endpoint_mask = output["valid_lines"][i].repeat_interleave(2)  # Each line has 2 endpoints
+                            full_line_descriptors[i, endpoint_mask] = valid_descriptors_list[i]
+
+                        # Reshape to [B, N_lines, 2, D] to keep endpoints grouped per line
+                        output["line_descriptors"] = full_line_descriptors.reshape(b, n_lines, 2, descriptor_dim)
+                else:
+                    raise NotImplementedError("Do not support Line Descriptors from DeDoDe")
 
         return output
 
@@ -769,6 +952,24 @@ class JointPointLineDetectorDescriptor(BaseModel):
         with torch.no_grad():
             descriptors = self.aliked_lw(pred)
 
+        return descriptors
+
+    def sample_descriptors(self, torch_image, torch_points):
+        """
+        Performs forward pass to get feature map and computes descriptors for given points using SDDH.
+
+        Takes
+         - image as torch tensor Shape non grayscale, normalized [B, C, H, W]
+         - tensor of points Shape [1, N, 2] and computes descriptors for them.
+        Return: the descriptor of each endpoints of shape [256, N*2]
+        """
+
+        _, feat_map = self._compute_dense_features(torch_image)
+        # transform kp tom expected format
+        b, c, h, w = torch_image.shape
+        wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
+        keypoints = torch_points / wh * 2 - 1  # (w,h) -> (-1~1,-1~1)
+        descriptors = self.descriptor_branch(feat_map, keypoints)[0]
         return descriptors
 
     def load_pretrained_aliked_elements(self) -> None:
