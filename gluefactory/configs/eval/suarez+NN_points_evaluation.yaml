@@ -2,6 +2,7 @@ model:
   name: two_view_pipeline
   extractor:
     name: lines.wireframe_suarez
+    max_num_keypoints: 2048
   matcher:
     name: matchers.nearest_neighbor_matcher
 benchmarks:
@@ -13,6 +14,23 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
+  scannet1500:
+    data:
+      preprocessing:
+        side: long
+        resize: 1600
+    eval:
+      estimator: poselib
+      ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
+    model:
+      extractor:
+        max_num_keypoints: 4096
   hpatches:
     data:
       preprocessing:
@@ -21,6 +39,9 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         max_num_keypoints: 1024

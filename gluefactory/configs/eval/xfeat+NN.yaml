@@ -2,7 +2,7 @@ model:
     name: two_view_pipeline
     extractor:
         name: extractors.xfeat  # XFeat - Sparse model, use xfeat_dense for dense model
-        max_num_keypoints: 4096
+        max_num_keypoints: 2048
         detection_threshold: 0.05
         pretrained: True
         model_name: xfeat
@@ -23,6 +23,23 @@ benchmarks:
         eval:
             estimator: poselib
             ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
+    scannet1500:
+        data:
+            preprocessing:
+                side: long
+                resize: 1600
+        eval:
+            estimator: poselib
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
+        model:
+            extractor:
+                max_num_keypoints: 4096
     hpatches:
         data:
             preprocessing:
@@ -31,6 +48,9 @@ benchmarks:
         eval:
             estimator: poselib
             ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
         model:
             extractor:
                 max_num_keypoints: 1024  # overwrite config above

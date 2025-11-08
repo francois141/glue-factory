@@ -18,6 +18,15 @@ echo "Running all checkpoint JPL benchmark"
 mkdir -p $DIR/eval/point_evaluation
 OUTPUT_DIR=$DIR/eval/point_evaluation
 
+# -------------- Configurable Experiments -----------------
+# Comment out experiments you don't want to run
+EXPERIMENTS=(
+  "megadepth"
+  "hpatches"
+  "scannet"
+)
+# ---------------------------------------------------------
+
 # -------------- Function to Run Eval -----------------
 run_eval() {
   local conf_path="$1"
@@ -28,17 +37,28 @@ run_eval() {
 
   echo "Running evaluation for: $tag"
 
-  python -m gluefactory.eval.megadepth1500 \
-    --conf "$conf_path" \
-    --overwrite > "${OUTPUT_DIR}/${tag}_megadepth.txt"
-
-  python -m gluefactory.eval.scannet1500 \
-    --conf "$conf_path" \
-    --overwrite > "${OUTPUT_DIR}/${tag}_scannet1500.txt"
-
-  python -m gluefactory.eval.hpatches \
-    --conf "$conf_path" \
-    --overwrite > "${OUTPUT_DIR}/${tag}_hpatches.txt"
+  for experiment in "${EXPERIMENTS[@]}"; do
+    case "$experiment" in
+      "megadepth")
+        python -m gluefactory.eval.megadepth1500 \
+          --conf "$conf_path" \
+          --overwrite > "${OUTPUT_DIR}/${tag}_megadepth.txt"
+        ;;
+      "scannet")
+        python -m gluefactory.eval.scannet1500 \
+          --conf "$conf_path" \
+          --overwrite > "${OUTPUT_DIR}/${tag}_scannet1500.txt"
+        ;;
+      "hpatches")
+        python -m gluefactory.eval.hpatches \
+          --conf "$conf_path" \
+          --overwrite > "${OUTPUT_DIR}/${tag}_hpatches.txt"
+        ;;
+      *)
+        echo "Warning: Unknown experiment '$experiment'"
+        ;;
+    esac
+  done
 }
 # -----------------------------------------------------
 
@@ -56,11 +76,11 @@ run_eval "./gluefactory/configs/eval/xfeat+NN.yaml"
 run_eval "./gluefactory/configs/eval/suarez+NN_points_evaluation.yaml"
 
 # ROMA evaluation
-run_eval "./gluefactory/configs/eval/jpl+ROMA_points_evaluation.yaml"
-run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml"
-run_eval "./gluefactory/configs/eval/aliked+ROMA.yaml" 
-run_eval "./gluefactory/configs/eval/disk+ROMA.yaml" 
-run_eval "./gluefactory/configs/eval/sift+ROMA.yaml" 
-run_eval "./gluefactory/configs/eval/dedode+ROMA.yaml" 
-run_eval "./gluefactory/configs/eval/dad+ROMA.yaml"
-run_eval "./gluefactory/configs/eval/xfeat+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/jpl+ROMA_points_evaluation.yaml"
+#run_eval "./gluefactory/configs/eval/superpoint+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/aliked+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/disk+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/sift+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/dedode+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/dad+ROMA.yaml"
+#run_eval "./gluefactory/configs/eval/xfeat+ROMA.yaml"
