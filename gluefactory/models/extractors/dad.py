@@ -10,6 +10,9 @@ from ..base_model import BaseModel
 
 
 class DadDetector(BaseModel):
+    """
+    Uses DaD as a detector and DeDoDe v2 as Descriptor
+    """
     default_conf = {
         "max_num_keypoints": 1024,
     }

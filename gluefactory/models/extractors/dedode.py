@@ -1,5 +1,6 @@
-"""Gluefactory port of DAD point detector
-The code comes from: https://github.com/Parskatt/dad
+"""
+Gluefactory port of DeDoDe point detector / descriptor
+The code comes from: https://github.com/Parskatt/DeDoDe
 """
 
 from collections import OrderedDict
@@ -18,6 +19,9 @@ from ..utils.misc import pad_and_stack
 
 
 class DeDoDeDetector(BaseModel):
+    """
+    DeDoDe v2 detector with DeDoDe v1 descriptor (v2 does not have new descriptor, thus use old)
+    """
     default_conf = {
         "max_num_keypoints": 1024,
     }
@@ -26,7 +30,7 @@ class DeDoDeDetector(BaseModel):
         return True
 
     def _init(self, conf):
-
+        # weights=None uses v2 weights by default
         self.dedode_detector = dedode_detector_L(weights=None)
 
         self.descriptor_lightweight = dedode_descriptor_B(weights=None)
