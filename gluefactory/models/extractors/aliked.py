@@ -881,6 +881,38 @@ class ALIKED(BaseModel):
             "score_map": score_map,  # Bx1xHxW
         }
 
+    def sample_descriptors(self, torch_image, torch_points):
+        """
+        Performs forward pass to get feature map and computes descriptors for given points.
+
+        Args:
+            torch_image: torch tensor [B, C, H, W], normalized image (grayscale or RGB)
+            torch_points: torch tensor [B, N_b, 2], points in pixel coordinates
+
+        Returns:
+            list of tensors, one per batch image, each shaped [N_b, D]
+        """
+        b, c, h, w = torch_image.shape
+
+        # Convert grayscale to RGB if needed
+        if c == 1:
+            torch_image = torch_image.repeat(1, 3, 1, 1)
+
+        # Get dense feature map
+        feature_map, _ = self.extract_dense_map(torch_image)
+
+        # Normalize points from pixel space to [-1, 1]
+        wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
+        keypoints_list = []
+        for i in range(b):
+            keypoints_normalized = torch_points[i] / wh * 2 - 1  # [N_b, 2]
+            keypoints_list.append(keypoints_normalized)
+
+        # Sample descriptors using SDDH descriptor head
+        descriptors, _ = self.desc_head(feature_map, keypoints_list)
+
+        return descriptors  # Already returns list of tensors [N_b, D]
+
     def loss(self, pred, data):
         raise NotImplementedError
 

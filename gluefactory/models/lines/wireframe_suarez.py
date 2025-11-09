@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from faster_pytlsd import params_lsd
 from wireframe_distillation.wireframe_net import WireframeNet
 
@@ -45,6 +46,57 @@ class WireframeSuarez(BaseModel):
             "keypoint_scores": results["scores"],
             "descriptors": results["descriptors"],
         }
+
+    def sample_descriptors(self, torch_image, torch_points):
+        """
+        Performs forward pass to get descriptors for given points using DISK feature map.
+
+        Args:
+            torch_image: torch tensor [B, C, H, W], normalized image (grayscale or RGB)
+            torch_points: torch tensor [B, N_b, 2], points in pixel coordinates
+
+        Returns:
+            list of tensors, one per batch image, each shaped [N_b, D]
+        """
+        b, c, h, w = torch_image.shape
+        device = torch_image.device
+
+        # Transform to model's expected size
+        input_batch = self.model.transform_batch(torch_image)
+
+        # Get dense feature map (DISK descriptors)
+        with torch.no_grad():
+            encoded_features = self.model.encoder(input_batch)
+            decoded_features_disk = self.model.decoder_DISK(encoded_features)
+            feature_map = decoded_features_disk[:, 1:129, :, :]  # Descriptor channels
+
+        # Adjust points for resized image
+        scale_x = self.model.size[1] / w
+        scale_y = self.model.size[0] / h
+        scaled_points = torch_points.clone()
+        scaled_points[..., 0] *= scale_x
+        scaled_points[..., 1] *= scale_y
+
+        # Normalize to [-1, 1] for grid_sample
+        img_wh = torch.tensor(
+            [self.model.size[1] - 1, self.model.size[0] - 1], device=device
+        )
+        normalized_points = 2 * scaled_points / img_wh - 1
+
+        # Sample using grid_sample
+        descriptors_list = []
+        for i in range(b):
+            desc = F.grid_sample(
+                feature_map[i : i + 1],
+                normalized_points[i : i + 1, :, None, :],
+                mode="bilinear",
+                align_corners=True,
+            )  # [1, D, N, 1]
+            desc = desc.squeeze(3).squeeze(0).t()  # [N, D]
+            desc = F.normalize(desc, p=2, dim=1)  # Normalize
+            descriptors_list.append(desc)
+
+        return descriptors_list
 
     def loss(self, pred, data):
         raise NotImplementedError

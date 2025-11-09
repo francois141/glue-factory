@@ -32,7 +32,7 @@ class DeDoDeDetector(BaseModel):
         self.descriptor_lightweight = dedode_descriptor_B(weights=None)
         # self.descriptor_heavyweight = dedode_descriptor_G(weights = None)
 
-        self.max_num_keypoints = 1024
+        self.max_num_keypoints = self.conf["max_num_keypoints"]
 
     def _forward(self, data):
         with torch.no_grad():
@@ -68,6 +68,33 @@ class DeDoDeDetector(BaseModel):
         return self.descriptor_lightweight.describe_keypoints(input_data, keypoints)[
             "descriptions"
         ]
+
+    def sample_descriptors(self, torch_image, torch_points):
+        """
+        Performs forward pass to get descriptors for given points.
+
+        Args:
+            torch_image: torch tensor [B, C, H, W], normalized image (grayscale or RGB)
+            torch_points: torch tensor [B, N_b, 2], points in pixel coordinates
+
+        Returns:
+            list of tensors, one per batch image, each shaped [N_b, D]
+        """
+        b, c, h, w = torch_image.shape
+
+        # Normalize points from pixel space to [-1, 1]
+        wh = torch.tensor([w - 1, h - 1], device=torch_image.device)
+        keypoints_normalized = torch_points / wh * 2 - 1  # [B, N_b, 2]
+
+        # Use existing describe_keypoints method
+        input_data = {"image": torch_image}
+        descriptors = self.describe_keypoints(input_data, keypoints_normalized)
+
+        # Convert to list format
+        if descriptors.dim() == 3:  # [B, N, D]
+            return [descriptors[i] for i in range(b)]
+        else:
+            return [descriptors]  # Single batch
 
     def loss(self, pred, data):
         raise NotImplementedError
