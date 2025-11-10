@@ -17,43 +17,30 @@ SetupStack
 mkdir -p $DIR/eval/line_evaluation
 OUTPUT_DIR=$DIR/eval/line_evaluation
 
-echo "Evaluation of Suarez"
+# List of benchmarks to run - comment out any you don't want to run
+BENCHMARKS=(
+    "hpatches_lines"
+    "rdnim_lines"
+)
 
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/suarez+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_wireframe_suarez.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/suarez+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_wireframe_suarez.txt"
+# List of configs to evaluate - comment out any you don't want to run
+# Format: "Display Name|full_config_path|output_suffix"
+CONFIGS=(
+    "Suarez|gluefactory/configs/eval/suarez+LM.yaml|wireframe_suarez"
+    "JPL|gluefactory/configs/eval/jpl+LM.yaml|jpl"
+    "JPL with ferrari LSD|gluefactory/configs/eval/jpl+points_lsd+LM.yaml|jpl_ferrari_lsd"
+    "deeplsd|gluefactory/configs/eval/deeplsd+AF+LM.yaml|deeplsd"
+    "deeplsd without angle field|gluefactory/configs/eval/deeplsd+LM.yaml|deeplsd_without_af"
+    "scalelsd|gluefactory/configs/eval/scalelsd+LM.yaml|scalelsd"
+    "sold2|gluefactory/configs/eval/sold2+LM.yaml|sold2"
+    "lsd|gluefactory/configs/eval/lsd+LM.yaml|lsd"
+)
 
-
-echo "Evaluation of JPL"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_jpl.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/jpl+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_jpl.txt"
-
-echo "Evaluation of JPL with ferrari LSD"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/jpl+points_lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_jpl_ferrari_lsd.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/jpl+points_lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_jpl_ferrari_lsd.txt"
-
-echo "Evaluation of deeplsd"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/deeplsd+AF+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_deeplsd.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/deeplsd+AF+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_deeplsd.txt"
-
-echo "Evaluation of deeplsd without angle field"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/deeplsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_deeplsd_without_af.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/deeplsd+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_deeplsd_without_af.txt"
-
-echo "Evaluation of scalelsd"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/scalelsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_scalelsd.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/scalelsd+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_scalelsd.txt"
-
-echo "Evaluation of sold2"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/sold2+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_sold2.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/sold2+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_sold2.txt"
-
-echo "Evaluation of lsd"
-
-python -m gluefactory.eval.hpatches_lines --conf gluefactory/configs/eval/lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/hpatches_lsd.txt"
-python -m gluefactory.eval.rdnim_lines --conf gluefactory/configs/eval/lsd+LM.yaml --overwrite > "${OUTPUT_DIR}/rdnim_lines_lsd.txt"
+# Run evaluations
+for config_entry in "${CONFIGS[@]}"; do
+    IFS='|' read -r display_name config_path output_suffix <<< "$config_entry"
+    echo "Evaluation of $display_name"
+    for benchmark in "${BENCHMARKS[@]}"; do
+        python -m "gluefactory.eval.${benchmark}" --conf "$config_path" --overwrite > "${OUTPUT_DIR}/${benchmark}_${output_suffix}.txt"
+    done
+done
