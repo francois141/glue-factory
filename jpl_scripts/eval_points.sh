@@ -1,11 +1,9 @@
 #!/bin/bash
-# Cmd params 'run_training_euler.sh [exp_name] [path to conf]'
-
 #SBATCH --time=1-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --gpus=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=6000
 
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
