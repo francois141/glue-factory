@@ -36,7 +36,7 @@ benchmarks:
         max_iterations: 2000000
     model:
       extractor:
-        max_num_keypoints: 4096
+        max_num_keypoints: 2048
   hpatches:
     data:
       preprocessing:
