@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-from faster_pytlsd import params_lsd
 from wireframe_distillation.wireframe_net import WireframeNet
 
 from ...settings import DATA_PATH
@@ -19,7 +18,9 @@ def download_model(path):
 
 
 class WireframeSuarez(BaseModel):
-    default_conf = {}
+    # Wireframe does not have way to define max num keypoints. Possibly as this would impede line detection possibility.
+    default_conf = {
+    }
 
     required_data_keys = ["image"]
 
