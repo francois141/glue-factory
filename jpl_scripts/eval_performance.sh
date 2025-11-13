@@ -36,6 +36,7 @@ CONFIGS=(
     "Running DaD|gluefactory/configs/timing_eval/points_only_dad.yaml|points_only_dad.txt"
     "Running DISK|gluefactory/configs/timing_eval/points_only_disk.yaml|points_only_disk.txt"
     "Running SuperPoint|gluefactory/configs/timing_eval/points_only_superpoint.yaml|points_only_superpoint.txt"
+    "Running JPL (points only)|gluefactory/configs/timing_eval/points_only_jpl.yaml|points_only_jpl.txt"
 )
 
 # Run profiling
