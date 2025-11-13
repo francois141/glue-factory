@@ -27,6 +27,8 @@ CONFIGS=(
     "Profiling DeepLSD + Aliked|gluefactory/configs/timing_eval/aliked+deeplsd.yaml|aliked+deeplsd_gpu.txt"
     "Profiling DeepLSD + Superpoint|gluefactory/configs/timing_eval/superpoint+deeplsd.yaml|superpoint+deeplsd_gpu.txt"
     "Profiling DaD + ScaleLSD|gluefactory/configs/timing_eval/dad+scalelsd.yaml|dad+scalelsd_gpu.txt"
+    "Profiling Aliked + ScaleLSD|gluefactory/configs/timing_eval/aliked+scalelsd.yaml|aliked+scalelsd_gpu.txt"
+    "Profiling SuperPoint + ScaleLSD|gluefactory/configs/timing_eval/superpoint+scalelsd.yaml|superpoint+scalelsd_gpu.txt"
     "Running DeepLSD with AF|gluefactory/configs/timing_eval/lines_only_deeplsd+AF.yaml|ablation_deeplsd_af.txt"
     "Running DeepLSD without AF|gluefactory/configs/timing_eval/lines_only_deeplsd.yaml|ablation_deeplsd_without_af.txt"
     "Running LSD|gluefactory/configs/timing_eval/lines_only_lsd.yaml|ablation_lsd.txt"
