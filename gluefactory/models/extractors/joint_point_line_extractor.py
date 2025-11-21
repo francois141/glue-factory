@@ -178,21 +178,22 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.descriptor_branch = DeDoDeDetector({})
 
         # Line distance field decoder similar to that in DeepLSD
-        self.distance_field_branch = nn.Sequential(
-            nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(conf.line_df_decoder_channels),
-            nn.Conv2d(
-                conf.line_df_decoder_channels,
-                conf.line_df_decoder_channels,
-                kernel_size=3,
-                padding=1,
-            ),
-            nn.ReLU(),
-            nn.BatchNorm2d(conf.line_df_decoder_channels),
-            nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
-            nn.ReLU(),
-        )
+        if self.conf.training.do or self.conf.line_detection.do:
+            self.distance_field_branch = nn.Sequential(
+                nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.BatchNorm2d(conf.line_df_decoder_channels),
+                nn.Conv2d(
+                    conf.line_df_decoder_channels,
+                    conf.line_df_decoder_channels,
+                    kernel_size=3,
+                    padding=1,
+                ),
+                nn.ReLU(),
+                nn.BatchNorm2d(conf.line_df_decoder_channels),
+                nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
+                nn.ReLU(),
+            )
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
         if conf.training.do and conf.training.aliked_pretrained:
@@ -251,8 +252,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.conf.line_detection.conf
         )
 
-        if self.conf.training.loss.kp_loss_name == "distill":
-            # Use dad distillation
+        if self.conf.training.do and self.conf.training.loss.kp_loss_name == "distill":
             self.dad_distil = DadDistillDetector(
                 {
                     "max_num_keypoints": 1024,
@@ -377,23 +377,24 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 keypoint_and_junction_score_map.squeeze()
             )  # B x H x W
 
-        ## Line DF Decoder ##
-        if self.conf.freeze_lines:
-            self.distance_field_branch.eval()
-            with torch.no_grad():
+        # Perform line distance field prediction if in training or line detection activated
+        if self.conf.training.do or self.conf.line_detection.do:
+            if self.conf.freeze_lines:
+                self.distance_field_branch.eval()
+                with torch.no_grad():
+                    raw_df = self.distance_field_branch(feature_map)
+            else:
                 raw_df = self.distance_field_branch(feature_map)
-        else:
-            raw_df = self.distance_field_branch(feature_map)
 
-        # denormalize as NN outputs normalized version
-        line_distance_field = self.denormalize_df(raw_df)
-        # remove additional dimensions of size 1 if not having batchsize one
-        line_distance_field = (
-            line_distance_field.squeeze(1)
-            if line_distance_field.shape[0] == 1
-            else line_distance_field.squeeze()
-        )
-        output["line_distancefield"] = line_distance_field
+            # denormalize as NN outputs normalized version
+            line_distance_field = self.denormalize_df(raw_df)
+            # remove additional dimensions of size 1 if not having batchsize one
+            line_distance_field = (
+                line_distance_field.squeeze(1)
+                if line_distance_field.shape[0] == 1
+                else line_distance_field.squeeze()
+            )
+            output["line_distancefield"] = line_distance_field
 
         # Keypoint detection also removes kp at border. it can return topk keypoints or set of thresholded kp.
         keypoints, kptscores, kpt_dispersity = self.dkd(
