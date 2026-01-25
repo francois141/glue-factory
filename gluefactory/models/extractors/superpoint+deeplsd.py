@@ -1,5 +1,5 @@
-"""Gluefactory port of DAD point detector
-The code comes from: https://github.com/Parskatt/dad
+"""
+Gluefactory implementation of joint point detector using deeplsd and superpoint
 """
 
 from collections import OrderedDict
