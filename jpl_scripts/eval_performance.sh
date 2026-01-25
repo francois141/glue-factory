@@ -7,9 +7,14 @@
 #SBATCH --mem-per-cpu=6000
 
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
-source $DIR/common.sh
+#source $DIR/common.sh
 
-SetupStack
+#SetupStack
+
+module load eth_proxy
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate jpl__env
 
 mkdir -p $DIR/eval/performance
 OUTPUT_DIR=$DIR/eval/performance

@@ -1,13 +1,15 @@
 model:
   name: two_view_pipeline
   extractor:
-    name: extractors.mixed
+    name: gluefactory.models.extractors.mixed
+    interpolate_descriptors_from: all_descriptors
     detector:
-      name: extractors.pl_net_extractor
+      name: gluefactory.models.extractors.pl_net_extractor
       max_num_junctions: 1000
     descriptor:
-      name: extractors.superpoint_open
-      max_num_keypoints: 2048
+      name: gluefactory.models.extractors.superpoint
+      max_num_keypoints: 0
+      sparse_outputs: false
   matcher:
     name: matchers.nearest_neighbor_matcher
 benchmarks:

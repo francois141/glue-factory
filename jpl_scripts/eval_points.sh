@@ -7,9 +7,16 @@
 #SBATCH --mem-per-cpu=6000
 
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
-source $DIR/common.sh
+#source $DIR/common.sh
 
-SetupStack
+#SetupStack
+#source $DIR/common.sh
+
+#SetupStack
+module load eth_proxy
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate jpl__env
 
 echo "Running all checkpoint JPL benchmark"
 
@@ -64,15 +71,15 @@ run_eval() {
 # Run evaluations
 # NN evaluation
 run_eval "./gluefactory/configs/eval/plnet+NN_points_evaluation.yaml"
-run_eval "./gluefactory/configs/eval/jpl+NN_points_evaluation.yaml"
-run_eval "./gluefactory/configs/eval/superpoint+NN.yaml"
-run_eval "./gluefactory/configs/eval/aliked+NN.yaml" 
-run_eval "./gluefactory/configs/eval/disk+NN.yaml" 
-run_eval "./gluefactory/configs/eval/sift+NN.yaml"
-run_eval "./gluefactory/configs/eval/dedode+NN.yaml"
-run_eval "./gluefactory/configs/eval/dad+NN.yaml"
-run_eval "./gluefactory/configs/eval/xfeat+NN.yaml"
-run_eval "./gluefactory/configs/eval/suarez+NN_points_evaluation.yaml"
+#run_eval "./gluefactory/configs/eval/jpl+NN_points_evaluation.yaml"
+#run_eval "./gluefactory/configs/eval/superpoint+NN.yaml"
+#run_eval "./gluefactory/configs/eval/aliked+NN.yaml" 
+#run_eval "./gluefactory/configs/eval/disk+NN.yaml" 
+#run_eval "./gluefactory/configs/eval/sift+NN.yaml"
+#run_eval "./gluefactory/configs/eval/dedode+NN.yaml"
+#run_eval "./gluefactory/configs/eval/dad+NN.yaml"
+#run_eval "./gluefactory/configs/eval/xfeat+NN.yaml"
+#run_eval "./gluefactory/configs/eval/suarez+NN_points_evaluation.yaml"
 
 # ROMA evaluation
 #run_eval "./gluefactory/configs/eval/jpl+ROMA_points_evaluation.yaml"
