@@ -31,6 +31,9 @@ class PLNet(BaseModel):
         "max_num_lines": 512,
     }
 
+    def is_initialized(self):
+        return True
+
     def _init(self, conf):
         """
         Initialize PlNet model - download model weights if not accessible yet and load model.
