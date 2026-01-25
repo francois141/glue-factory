@@ -4,8 +4,7 @@ model:
     name: extractors.mixed
     detector:
       name: extractors.pl_net_extractor
-      max_num_junctions: 512
-      junction_threshold: 0.008
+      max_num_junctions: 1000
     descriptor:
       name: extractors.superpoint_open
       max_num_keypoints: 2048

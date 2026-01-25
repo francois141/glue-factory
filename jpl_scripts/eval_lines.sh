@@ -24,6 +24,7 @@ BENCHMARKS=(
 # List of configs to evaluate - comment out any you don't want to run
 # Format: "Display Name|full_config_path|output_suffix"
 CONFIGS=(
+    "PLNet|gluefactory/configs/eval/plnet+LM.yaml|plnet"
     "Suarez|gluefactory/configs/eval/suarez+LM.yaml|wireframe_suarez"
     "JPL|gluefactory/configs/eval/jpl+LM.yaml|jpl"
     "JPL with ferrari LSD|gluefactory/configs/eval/jpl+points_lsd+LM.yaml|jpl_ferrari_lsd"

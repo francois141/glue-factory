@@ -22,6 +22,7 @@ NUMER_RUNS_GPU=500
 # List of configs to profile - comment out any you don't want to run
 # Format: "Display Name|full_config_path|output_filename"
 CONFIGS=(
+    "Profiling PLNet|gluefactory/configs/timing_eval/plnet.yaml|plnet_gpu.txt"
     "Profiling JPL|gluefactory/configs/timing_eval/jpl.yaml|jpl_gpu.txt"
     "Profiling Wireframe (suarez)|gluefactory/configs/timing_eval/wireframe.yaml|suarez_gpu.txt"
     "Profiling DeepLSD + Aliked|gluefactory/configs/timing_eval/aliked+deeplsd.yaml|aliked+deeplsd_gpu.txt"

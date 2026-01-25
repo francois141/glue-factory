@@ -3,9 +3,7 @@ model:
   extractor:
     name: extractors.pl_net_extractor
     max_num_junctions: 512
-    max_num_lines: 512
-    junction_threshold: 0.008
-    line_threshold: 0.05
+    max_num_lines: 1000
   matcher:
     name: matchers.line_matcher
 benchmarks:

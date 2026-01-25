@@ -63,6 +63,7 @@ run_eval() {
 
 # Run evaluations
 # NN evaluation
+run_eval "./gluefactory/configs/eval/plnet+NN_points_evaluation.yaml"
 run_eval "./gluefactory/configs/eval/jpl+NN_points_evaluation.yaml"
 run_eval "./gluefactory/configs/eval/superpoint+NN.yaml"
 run_eval "./gluefactory/configs/eval/aliked+NN.yaml" 
