@@ -2,8 +2,8 @@ model:
   name: two_view_pipeline
   extractor:
     name: extractors.pl_net_extractor
-    max_num_junctions: 512
-    max_num_lines: 1000
+    max_num_lines: 1000 # its set to 1000 internally, so allow all generated lines
+    num_keypoints: null
   matcher:
     name: matchers.line_matcher
 benchmarks:
@@ -18,6 +18,7 @@ benchmarks:
     model:
       extractor:
         max_num_junctions: 2048
+        num_keypoints: null
   megadepth1500_extended:
     data:
       preprocessing:
@@ -29,6 +30,7 @@ benchmarks:
     model:
       extractor:
         max_num_junctions: 2048
+        num_keypoints: null
   hpatches:
     data:
       preprocessing:
@@ -40,6 +42,7 @@ benchmarks:
     model:
       extractor:
         max_num_junctions: 1024
+        num_keypoints: null
     use_points: False
     use_lines: True
   hpatches_extended:
@@ -53,17 +56,16 @@ benchmarks:
     model:
       extractor:
         max_num_junctions: 1024
+        num_keypoints: null
   hpatches_lines:
     data:
       preprocessing:
         side: long
         resize: 800
-    eval:
-      estimator: poselib
-      ransac_th: -1
     model:
       extractor:
         max_num_junctions: 1024
+        num_keypoints: null
     use_points: False
     use_lines: True
   scannet1500:
@@ -77,3 +79,4 @@ benchmarks:
     model:
       extractor:
         max_num_junctions: 1024
+        num_keypoints: null

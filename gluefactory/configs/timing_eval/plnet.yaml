@@ -1,7 +1,7 @@
 model:
     name: extractors.pl_net_extractor
-    max_num_junctions: 1000
-    max_num_lines: 1000
+    max_num_lines: 1000 # internally the number of lines is limited to 1000 max
+    num_keypoints: 2048
 data:
     name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
     data_dir: "revisitop1m_POLD2/jpg"

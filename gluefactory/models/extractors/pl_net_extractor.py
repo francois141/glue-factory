@@ -29,6 +29,7 @@ class PLNet(BaseModel):
         "config_path": "other/PLNet/configs/plnet.yaml",
         "max_num_junctions": 512,
         "max_num_lines": 512,
+        "num_keypoints": None,  # If set, return exactly this many keypoints (top by score, no threshold)
     }
 
     def is_initialized(self):
@@ -109,7 +110,7 @@ class PLNet(BaseModel):
             }
 
         with torch.no_grad():
-            out, _ = self.net.forward_test(image, [meta])
+            out, _ = self.net.forward_test(image, [meta], num_keypoints=self.conf.num_keypoints)
                 
         juncs = out['juncs_pred'] # [N, 2]
         junc_scores = out['juncs_score'] # [N]
@@ -121,8 +122,8 @@ class PLNet(BaseModel):
             junc_scores = junc_scores[mask]
    
             
-        # Keep top-k junctions
-        if len(juncs) > self.conf.max_num_junctions:
+        # Keep top-k junctions (skip if num_keypoints is explicitly set)
+        if self.conf.num_keypoints is None and len(juncs) > self.conf.max_num_junctions:
             junc_scores, indices = torch.topk(junc_scores, self.conf.max_num_junctions)
             juncs = juncs[indices]
 

@@ -61,17 +61,6 @@ benchmarks:
     model:
       extractor:
         max_num_keypoints: 1024
-  hpatches_lines:
-    data:
-      preprocessing:
-        side: long
-        resize: 800
-    eval:
-      estimator: poselib
-      ransac_th: -1
-    model:
-      extractor:
-        max_num_keypoints: 1024
   scannet1500:
     data:
       preprocessing:

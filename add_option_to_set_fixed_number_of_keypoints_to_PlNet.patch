@@ -1,0 +1,95 @@
+Subject: [PATCH] add option to set fixed number of keypoints to PlNet
+---
+Index: hawp/fsl/model/models.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/hawp/fsl/model/models.py b/hawp/fsl/model/models.py
+--- a/hawp/fsl/model/models.py	(revision 32b42b3b6cafdbd2267e4feac409c8810684cd78)
++++ b/hawp/fsl/model/models.py	(date 1769464266869)
+@@ -29,21 +29,26 @@
+                 disable[xp, yp] = True
+     heatmap[disable] *= 0.6
+     return heatmap
+-def post_jheatmap(heatmap, offset=None, delta=1):
++def post_jheatmap(heatmap, offset=None, delta=1, num_keypoints=None):
+     heatmap = nms_j(heatmap, delta=delta)
+-    # only select the best 1000 junctions for efficiency
+-    v0 = argsort2d(-heatmap)[:1000]
+-    confidence = -np.sort(-heatmap.ravel())[:1000]
+-    # v0 = argsort2d(-heatmap)[:250]
+-    # confidence = -np.sort(-heatmap.ravel())[:250]
+-    keep_id = np.where(confidence >= 1e-2)[0]
+-    if len(keep_id) == 0:
+-        return np.zeros((0, 3))
+-
+-    confidence = confidence[keep_id]
++
++    if num_keypoints is not None:
++        # Return exactly num_keypoints, no confidence filtering
++        v0 = argsort2d(-heatmap)[:num_keypoints]
++        confidence = -np.sort(-heatmap.ravel())[:num_keypoints]
++    else:
++        # Original behavior: top 1000, then filter by confidence
++        v0 = argsort2d(-heatmap)[:1000]
++        confidence = -np.sort(-heatmap.ravel())[:1000]
++        keep_id = np.where(confidence >= 1e-2)[0]
++        if len(keep_id) == 0:
++            return np.zeros((0, 3))
++        confidence = confidence[keep_id]
++        v0 = v0[keep_id]
++
+     if offset is not None:
+         v0 = np.array([v + offset[:, v[0], v[1]] for v in v0])
+-    v0 = v0[keep_id] + 0.5
++    v0 = v0 + 0.5
+     v0 = np.hstack((v0, confidence[:, np.newaxis]))
+     return v0
+ 
+@@ -250,7 +255,7 @@
+         else:
+             return lines_adjusted, lines_init, perm
+     
+-    def junction_detection(self, images, annotations = None):
++    def junction_detection(self, images, annotations = None, num_keypoints=None):
+         device = images.device
+ 
+         extra_info = {
+@@ -270,7 +275,7 @@
+         width = annotations[0]['width']
+         height = annotations[0]['height']
+ 
+-        junctions = post_jheatmap(jloc_pred[0,0].cpu().numpy(),offset=joff_pred[0,[1,0]].cpu().numpy())
++        junctions = post_jheatmap(jloc_pred[0,0].cpu().numpy(),offset=joff_pred[0,[1,0]].cpu().numpy(), num_keypoints=num_keypoints)
+         # junctions = post_jheatmap(jloc_pred[0,0].cpu().numpy())
+         scores = junctions[:,-1]
+         junctions = junctions[:,:2]
+@@ -290,7 +295,7 @@
+             'height': height,
+         }
+ 
+-    def forward_test(self, images, annotations = None):
++    def forward_test(self, images, annotations = None, num_keypoints=None):
+         device = images.device
+ 
+         extra_info = {
+@@ -328,9 +333,15 @@
+     
+         jloc_pred_nms = non_maximum_suppression(jloc_pred[0])
+ 
+-        topK = min(self.topk_junctions, int((jloc_pred_nms>self.jhm_threshold).float().sum().item()))
+-        
+-        juncs_pred, _ = get_junctions(non_maximum_suppression(jloc_pred[0]),joff_pred[0], topk=topK,th=self.jhm_threshold)
++        if num_keypoints is not None:
++            # Return exactly num_keypoints, no threshold filtering
++            topK = num_keypoints
++            th = 0
++        else:
++            topK = min(self.topk_junctions, int((jloc_pred_nms>self.jhm_threshold).float().sum().item()))
++            th = self.jhm_threshold
++
++        juncs_pred, _ = get_junctions(non_maximum_suppression(jloc_pred[0]),joff_pred[0], topk=topK,th=th)
+ 
+         extra_info['time_proposal'] = time.time() - extra_info['time_proposal']
+         extra_info['time_matching'] = time.time()

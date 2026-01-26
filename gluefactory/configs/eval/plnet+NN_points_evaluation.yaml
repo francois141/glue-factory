@@ -6,6 +6,7 @@ model:
     detector:
       name: gluefactory.models.extractors.pl_net_extractor
       max_num_junctions: 1000
+      num_keypoints: 1000
     descriptor:
       name: gluefactory.models.extractors.superpoint
       max_num_keypoints: 0
@@ -25,6 +26,7 @@ benchmarks:
       extractor:
         detector:
           max_num_junctions: 2048
+          num_keypoints: 2048
   megadepth1500_extended:
     data:
       preprocessing:
@@ -37,6 +39,7 @@ benchmarks:
       extractor:
         detector:
           max_num_junctions: 2048
+          num_keypoints: 2048
   hpatches:
     data:
       preprocessing:
@@ -49,6 +52,7 @@ benchmarks:
       extractor:
         detector:
           max_num_junctions: 1024
+          num_keypoints: 1024
   hpatches_extended:
     data:
       preprocessing:
@@ -61,6 +65,7 @@ benchmarks:
       extractor:
         detector:
           max_num_junctions: 1024
+          num_keypoints: 1024
   scannet1500:
     data:
       preprocessing:
@@ -73,3 +78,4 @@ benchmarks:
       extractor:
         detector:
           max_num_junctions: 1024
+          num_keypoints: 1024
