@@ -13,3 +13,9 @@
 [submodule "other/wireframe-detector"]
 	path = other/wireframe-detector
 	url = https://github.com/francois141/wireframe_distillation
+[submodule "other/points_lsd"]
+	path = other/points_lsd
+	url = https://github.com/francois141/points_lsd
+[submodule "other/faster_pytlsd"]
+	path = other/faster_pytlsd
+	url = https://github.com/francois141/faster_pytlsd

@@ -2,7 +2,7 @@
 Performs timing on a model and a dataset. Model and dataset must be specified in a conf file.
 Attention: Make sure you configure batch_size and dataset split correctly.
 
-- Ex run: python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_conf.yaml --num_s=100 --device=cuda
+- Ex run: python -m gluefactory.eval.timing_measurement --conf=gluefactory/configs/timing_eval/jpl.yaml --num_s=100 --device=cuda
 """
 
 import argparse
@@ -21,7 +21,9 @@ from gluefactory.utils.tensor import batch_to_device
 default_conf = {"model": {"name": ""}, "dataset": {"name": ""}}
 
 
-def get_dataset_and_loader(dset_conf):
+def get_dataset_and_loader(dset_conf, size=800):
+    dset_conf.reshape = size
+    dset_conf.square_pad = True
     dataset = get_dataset(dset_conf.name)(dset_conf)
     loader = dataset.get_data_loader(dset_conf.get("split", "test"))
     return loader
@@ -34,48 +36,31 @@ def sync_and_time():
     return t
 
 
-def run_measurement(
-    dataloader, model, num_s, name, device, batch_size
-):
-    print(f"Batch_size: {batch_size}")
-
-    count = 0
-    timings = []
-    input_batched = 0
-    for img in tqdm(
-        dataloader,
-        total=1
-    ):
+def measure_performance(dataloader, model, num_s, device, batch_size):
+    # Load a single batch to device
+    for img in dataloader:
         input_batched = batch_to_device(img, device, non_blocking=True)
         break
 
-
+    # Measure latency (single image)
+    img_single = {"image": input_batched['image'][:1]}
     start = sync_and_time()
-
-    with torch.no_grad():
-        for _ in tqdm(range(num_s)):
-            _ = model(input_batched)
-            if device == "cuda":
-                torch.cuda.synchronize()
-
-    end = sync_and_time()
-    print("Current throughput in detections/s: " + str(num_s * batch_size / (end - start)))
-
-    img_single =  {"image": input_batched['image'][:1]}
-
-    start = sync_and_time()
-
     with torch.no_grad():
         for _ in tqdm(range(num_s)):
             _ = model(img_single)
             if device == "cuda":
                 torch.cuda.synchronize()
-
     end = sync_and_time()
-    print("Current latency in milliseconds: " + str((end - start) / num_s * 1e3))
+    return (end - start) / num_s * 1e3
+
+
+def print_performance(latency):
+    print(f"Current latency in milliseconds: {latency:.2f}")
+
 
 def count_parameters(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -97,7 +82,6 @@ if __name__ == "__main__":
     print("Dataset: ", dset_conf.name)
     print("--Split: ", dset_conf.split)
     print("Model: ", model_conf.name)
-
 
     # get data loader
     dataloader = get_dataset_and_loader(dset_conf)
@@ -123,11 +107,30 @@ if __name__ == "__main__":
     else:
         print(f"Model contains : {count_parameters(model):.3e} parameters overall")
 
-    run_measurement(
+    print_performance(measure_performance(
         dataloader=dataloader,
         model=model,
         num_s=args.num_s,
-        name=model_conf.name,
         device=device,
         batch_size=dataloader.batch_size,
-    )
+    ))
+
+    print("=== Now running the latency over image size ===")
+
+    sizes = [64, 128, 256, 512, 1024, 2048]
+
+    outputs = []
+    for size in sizes:
+        outputs.append(measure_performance(
+            dataloader=get_dataset_and_loader(dset_conf, size=size),
+            model=model,
+            num_s=args.num_s,
+            device=args.device,
+            batch_size=dataloader.batch_size,
+        ))
+
+    print("=== Sizes ===")
+    print(sizes)
+
+    print("=== Latencies ===")
+    print(outputs)
