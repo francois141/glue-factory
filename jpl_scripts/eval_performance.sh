@@ -45,5 +45,6 @@ CONFIGS=(
 for config_entry in "${CONFIGS[@]}"; do
     IFS='|' read -r display_name config_path output_file <<< "$config_entry"
     echo "$display_name"
-    python -m gluefactory.eval.timing_measurement --conf="$config_path" --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/${output_file}"
+    python -m gluefactory.eval.timing_measurement --conf="$config_path" --num_s=$NUMER_RUNS_GPU --device=cuda > "${OUTPUT_DIR}/${output_file}_gpu"
+    python -m gluefactory.eval.timing_measurement --conf="$config_path" --num_s=$NUMER_RUNS_GPU --device=cpu > "${OUTPUT_DIR}/${output_file}_cpu"
 done
