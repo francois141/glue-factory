@@ -9,7 +9,7 @@ model:
       num_keypoints: 1000
     descriptor:
       name: gluefactory.models.extractors.superpoint
-      max_num_keypoints: 0
+      max_num_keypoints: 0 # set to only return dense descriptors
       sparse_outputs: false
   matcher:
     name: matchers.nearest_neighbor_matcher

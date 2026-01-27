@@ -21,5 +21,3 @@ benchmarks:
             preprocessing:
                 side: long
                 resize: 800
-        use_points: False
-        use_lines: True

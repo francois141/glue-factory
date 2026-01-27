@@ -45,7 +45,7 @@ class MixedExtractor(BaseModel):
         else:
             pred = data["cache"]
         if self.conf.detector.name:
-            pred = {**pred, **self.descriptor({**pred, **data})}
+            pred = {**pred, **self.descriptor({**pred, **data})[self.conf.interpolate_descriptors_from]}
 
         if self.conf.interpolate_descriptors_from:
             h, w = data["image"].shape[-2:]

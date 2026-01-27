@@ -62,12 +62,6 @@ benchmarks:
       preprocessing:
         side: long
         resize: 800
-    model:
-      extractor:
-        max_num_junctions: 1024
-        num_keypoints: null
-    use_points: False
-    use_lines: True
   scannet1500:
     data:
       preprocessing:
