@@ -143,7 +143,7 @@ def eval_homography_robust(data, pred, conf):
         pts0, pts1, _ = get_matches_scores(kp0, kp1, m0, scores0)
         data_["m_kpts0"] = pts0
         data_["m_kpts1"] = pts1
-    if "lines0" in pred:
+    if "lines0" in pred and "line_matches0" in pred:
         if "orig_lines0" in pred:
             lines0 = pred["orig_lines0"]
             lines1 = pred["orig_lines1"]
