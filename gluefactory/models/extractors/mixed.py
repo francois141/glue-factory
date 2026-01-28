@@ -17,6 +17,15 @@ class MixedExtractor(BaseModel):
     required_data_keys = ["image"]
     required_cache_keys = []
 
+    def is_initialized(self):
+        """Check if both detector and descriptor are initialized."""
+        initialized = True
+        if self.conf.detector.name and hasattr(self, "detector"):
+            initialized = initialized and self.detector.is_initialized()
+        if self.conf.descriptor.name and hasattr(self, "descriptor"):
+            initialized = initialized and self.descriptor.is_initialized()
+        return initialized
+
     def _init(self, conf):
         if conf.detector.name:
             self.detector = get_model(conf.detector.name)(to_ctr(conf.detector))
@@ -36,7 +45,11 @@ class MixedExtractor(BaseModel):
         else:
             pred = data["cache"]
         if self.conf.detector.name:
-            pred = {**pred, **self.descriptor({**pred, **data})}
+            desc_out = self.descriptor({**pred, **data})
+            extract_keys = [self.conf.interpolate_descriptors_from, "descriptors"]
+            for k in extract_keys:
+                if k in desc_out:
+                    pred[k] = desc_out[k]
 
         if self.conf.interpolate_descriptors_from:
             h, w = data["image"].shape[-2:]

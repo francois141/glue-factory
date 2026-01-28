@@ -40,6 +40,14 @@ dependencies = [
 urls = {Repository = "https://github.com/cvg/glue-factory"}
 
 [project.optional-dependencies]
+plnet = [
+    "yacs",
+    "easydict",
+    "scikit-image",
+    "shapely",
+    "python-json-logger",
+    "cython",
+]
 extra = [
     "pycolmap",
     "poselib",

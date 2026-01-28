@@ -1,21 +1,10 @@
-model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
+model:
   name: two_view_pipeline
   extractor:
-    name: extractors.joint_point_line_extractor
-    max_num_keypoints: 2048  # setting for training, for eval: -1
-    detection_threshold: 0.0 # set to <= 0 for training, for eval without fixed num of kp, do set to a good value
-    nms_radius: 3
-    subpixel_refinement: True
-    line_df_decoder_channels: 64
-    training:
-      do: False
-    line_detection:
-        do: True
-        conf:
-          lsd_type: old
-    checkpoint: null
+    name: extractors.pl_net_extractor
+    max_num_lines: 1000 # its set to 1000 internally, so allow all generated lines
+    num_keypoints: null
   matcher:
-    # select matcher needed for the benchmark - ex matchers.nearest_neighbor_matcher for point benchmarks
     name: matchers.line_matcher
 benchmarks:
   megadepth1500:
@@ -28,7 +17,8 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 2048
+        max_num_junctions: 2048
+        num_keypoints: null
   megadepth1500_extended:
     data:
       preprocessing:
@@ -39,7 +29,8 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 2048
+        max_num_junctions: 2048
+        num_keypoints: null
   hpatches:
     data:
       preprocessing:
@@ -50,7 +41,10 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 1024
+        max_num_junctions: 1024
+        num_keypoints: null
+    use_points: False
+    use_lines: True
   hpatches_extended:
     data:
       preprocessing:
@@ -61,5 +55,22 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 1024
-
+        max_num_junctions: 1024
+        num_keypoints: null
+  hpatches_lines:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+  scannet1500:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+    eval:
+      estimator: poselib
+      ransac_th: -1
+    model:
+      extractor:
+        max_num_junctions: 1024
+        num_keypoints: null

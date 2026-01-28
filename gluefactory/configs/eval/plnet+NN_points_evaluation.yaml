@@ -1,19 +1,16 @@
-model:  # TODO: REPLACE MODEL WITH YOU MODEL CFG YOU WANT TO BENCHMARK
+model:
   name: two_view_pipeline
   extractor:
-    name: extractors.joint_point_line_extractor
-    max_num_keypoints: 2048  # setting for training, for eval: -1
-    detection_threshold: 0.0 # set to <= 0 for training, for eval without fixed num of kp, do set to a good value
-    nms_radius: 3
-    subpixel_refinement: True
-    line_df_decoder_channels: 64
-    training:
-      do: False
-    line_detection:
-        do: False
-        conf:
-          lsd_type: old
-    checkpoint: null
+    name: gluefactory.models.extractors.mixed
+    interpolate_descriptors_from: all_descriptors
+    detector:
+      name: gluefactory.models.extractors.pl_net_extractor
+      max_num_junctions: 1000
+      num_keypoints: 1000
+    descriptor:
+      name: gluefactory.models.extractors.superpoint
+      max_num_keypoints: 0 # set to only return dense descriptors
+      sparse_outputs: false
   matcher:
     name: matchers.nearest_neighbor_matcher
 benchmarks:
@@ -27,7 +24,9 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 2048
+        detector:
+          max_num_junctions: 2048
+          num_keypoints: 2048
   megadepth1500_extended:
     data:
       preprocessing:
@@ -38,7 +37,9 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 2048
+        detector:
+          max_num_junctions: 2048
+          num_keypoints: 2048
   hpatches:
     data:
       preprocessing:
@@ -49,7 +50,9 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 1024
+        detector:
+          max_num_junctions: 1024
+          num_keypoints: 1024
   hpatches_extended:
     data:
       preprocessing:
@@ -60,7 +63,9 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 1024
+        detector:
+          max_num_junctions: 1024
+          num_keypoints: 1024
   scannet1500:
     data:
       preprocessing:
@@ -71,5 +76,6 @@ benchmarks:
       ransac_th: -1
     model:
       extractor:
-        max_num_keypoints: 1024
-
+        detector:
+          max_num_junctions: 1024
+          num_keypoints: 1024

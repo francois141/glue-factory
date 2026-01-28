@@ -7,9 +7,14 @@
 #SBATCH --mem-per-cpu=6000
 
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
-source $DIR/common.sh
+#source $DIR/common.sh
 
-SetupStack
+#SetupStack
+
+module load eth_proxy
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate jpl__env
 
 mkdir -p $DIR/eval/performance
 OUTPUT_DIR=$DIR/eval/performance
@@ -22,6 +27,7 @@ NUMER_RUNS_GPU=500
 # List of configs to profile - comment out any you don't want to run
 # Format: "Display Name|full_config_path|output_filename"
 CONFIGS=(
+    "Profiling PLNet|gluefactory/configs/timing_eval/plnet.yaml|plnet_gpu.txt"
     "Profiling JPL|gluefactory/configs/timing_eval/jpl.yaml|jpl_gpu.txt"
     "Profiling Wireframe (suarez)|gluefactory/configs/timing_eval/wireframe.yaml|suarez_gpu.txt"
     "Profiling DeepLSD + Aliked|gluefactory/configs/timing_eval/aliked+deeplsd.yaml|aliked+deeplsd_gpu.txt"

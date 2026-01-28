@@ -19,6 +19,9 @@
 [submodule "other/faster_pytlsd"]
 	path = other/faster_pytlsd
 	url = https://github.com/francois141/faster_pytlsd
+[submodule "other/PLNet"]
+	path = other/PLNet
+	url = https://github.com/sair-lab/PLNet
 [submodule "third_party/TP-LSD"]
 	path = third_party/TP-LSD
 	url = https://github.com/Siyuada7/TP-LSD

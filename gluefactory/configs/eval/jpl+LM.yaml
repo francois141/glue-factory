@@ -41,11 +41,3 @@ benchmarks:
       preprocessing:
         side: long
         resize: 800
-    eval:
-      estimator: poselib
-      ransac_th: -1
-    model:
-      extractor:
-        max_num_keypoints: 1024
-    use_points: False
-    use_lines: True

@@ -40,12 +40,6 @@ class RDNIMPipeline(EvalPipeline):
                 "name": None,  # remove gt matches
             }
         },
-        "eval": {
-            "estimator": "poselib",
-            "ransac_th": 1.0,  # -1 runs a bunch of thresholds and selects the best
-        },
-        "use_points": False,
-        "use_lines": True,
         "repeatability_th": [1, 3, 5],
         "num_lines_th": [10, 50, 300],
     }
@@ -64,19 +58,7 @@ class RDNIMPipeline(EvalPipeline):
     ]
 
     def _init(self, conf):
-        if conf.use_points:
-            self.export_keys += [
-                "keypoints0",
-                "keypoints1",
-                "keypoint_scores0",
-                "keypoint_scores1",
-                "matches0",
-                "matches1",
-                "matching_scores0",
-                "matching_scores1",
-            ]
-        if conf.use_lines:
-            self.export_keys += [
+        self.export_keys += [
                 "lines0",
                 "lines1",
                 "line_matches0",

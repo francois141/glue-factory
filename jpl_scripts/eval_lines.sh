@@ -3,14 +3,18 @@
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --gpus=1
-#SBATCH --gres=gpumem:23g
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=6000
 
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
-source $DIR/common.sh
+#source $DIR/common.sh
 
-SetupStack
+#SetupStack
+
+module load eth_proxy
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate jpl__env
 
 mkdir -p $DIR/eval/line_evaluation
 OUTPUT_DIR=$DIR/eval/line_evaluation
@@ -18,12 +22,13 @@ OUTPUT_DIR=$DIR/eval/line_evaluation
 # List of benchmarks to run - comment out any you don't want to run
 BENCHMARKS=(
     "hpatches_lines"
-    "rdnim_lines"
+    #"rdnim_lines"
 )
 
 # List of configs to evaluate - comment out any you don't want to run
 # Format: "Display Name|full_config_path|output_suffix"
 CONFIGS=(
+    "PLNet|gluefactory/configs/eval/plnet+LM.yaml|plnet"
     "Suarez|gluefactory/configs/eval/suarez+LM.yaml|wireframe_suarez"
     "JPL|gluefactory/configs/eval/jpl+LM.yaml|jpl"
     "JPL with ferrari LSD|gluefactory/configs/eval/jpl+points_lsd+LM.yaml|jpl_ferrari_lsd"
