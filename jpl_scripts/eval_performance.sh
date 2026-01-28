@@ -47,6 +47,9 @@ CONFIGS=(
     "Running DISK|gluefactory/configs/timing_eval/points_only_disk.yaml|points_only_disk.txt"
     "Running SuperPoint|gluefactory/configs/timing_eval/points_only_superpoint.yaml|points_only_superpoint.txt"
     "Running JPL (points only)|gluefactory/configs/timing_eval/points_only_jpl.yaml|points_only_jpl.txt"
+    "Profiling Aliked + TP-LSD|gluefactory/configs/timing_eval/aliked+tplsd.yaml|aliked+tplsd.txt"
+    "Profiling Aliked + M-LSD|gluefactory/configs/timing_eval/aliked+mlsd.yaml|aliked+mlsd.txt"
+    "Profiling PLNet + SP Descriptors|gluefactory/configs/timing_eval/plnet+sp_descriptors.yaml|plnet+sp_descriptors.txt"
 )
 
 # Run profiling

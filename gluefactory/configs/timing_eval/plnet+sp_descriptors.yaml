@@ -1,0 +1,28 @@
+model:
+    name: gluefactory.models.extractors.mixed
+    interpolate_descriptors_from: all_descriptors
+    detector:
+        name: gluefactory.models.extractors.pl_net_extractor
+        max_num_junctions: 1000
+        max_num_lines: 1000
+        num_keypoints: 2048
+    descriptor:
+        name: gluefactory.models.extractors.superpoint
+        max_num_keypoints: 0
+        sparse_outputs: false
+data:
+    name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
+    data_dir: "revisitop1m_POLD2/jpg"
+    split: 'val'
+    grayscale: False
+    num_workers: 1
+    val_batch_size: 1
+    prefetch_factor: 1
+    reshape: [800, 800]
+    square_pad: False
+    multiscale_learning:
+        do: False
+    load_features:
+        do: False
+    val_size: 500
+    train_size: 11500
