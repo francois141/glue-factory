@@ -19,11 +19,13 @@ import cv2
 import numpy as np
 import torch
 
-from ...settings import DATA_PATH, THIRD_PARTY_PATH
+from ...settings import THIRD_PARTY_PATH
 from ..base_model import BaseModel
 
 # Default location for TP-LSD clone when tplsd_root is not set
 _DEFAULT_TPLSD_ROOT = THIRD_PARTY_PATH / "TP-LSD"
+# DCNv2 extension (separate submodule at other/dcnv2)
+_DCNV2_PATH = Path(__file__).resolve().parents[3] / "other" / "dcnv2"
 
 
 class TPLSD(BaseModel):
@@ -94,76 +96,31 @@ class TPLSD(BaseModel):
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
 
-        # Check if DCNv2 is built before attempting import
-        dcnv2_path = root / "modeling" / "DCNv2"
-        if dcnv2_path.exists():
-            # Look for compiled extension
-            ext_files = list(dcnv2_path.glob("_ext*.so")) + list(dcnv2_path.glob("_ext*.pyd"))
-            if not ext_files:
-                raise ImportError(
-                    f"DCNv2 extension not built. "
-                    f"To build: cd {dcnv2_path} && python setup.py build_ext --inplace. "
-                    f"See {dcnv2_path}/README.md for details."
-                )
-            # Add DCNv2 directory to path so _ext module can be found
-            dcnv2_str = str(dcnv2_path)
-            if dcnv2_str not in sys.path:
-                sys.path.insert(0, dcnv2_str)
-            
-            # Set LD_LIBRARY_PATH to include PyTorch libraries (libc10.so, libtorch_cpu.so, etc.)
-            # This is critical for loading the DCNv2 extension which depends on PyTorch CUDA libraries
-            import os
-            lib_paths_to_add = []
-            
-            # Add conda/lib for general CUDA libraries (including libcudart.so)
-            conda_prefix = os.environ.get("CONDA_PREFIX", "")
-            if conda_prefix:
-                lib_path = os.path.join(conda_prefix, "lib")
-                if os.path.exists(lib_path):
-                    lib_paths_to_add.append(lib_path)
-                # Also check for cuda/lib64 subdirectory
-                cuda_lib_path = os.path.join(conda_prefix, "cuda", "lib64")
-                if os.path.exists(cuda_lib_path):
-                    lib_paths_to_add.append(cuda_lib_path)
-            
-            # Add PyTorch lib directory (more reliable than searching sys.path)
-            try:
-                import torch
-                torch_dir = os.path.dirname(torch.__file__)
-                torch_lib_path = os.path.join(torch_dir, "lib")
-                if os.path.exists(torch_lib_path):
-                    lib_paths_to_add.append(torch_lib_path)
-            except ImportError:
-                pass  # PyTorch not available, will fail later anyway
-            
-            # Update LD_LIBRARY_PATH
-            if lib_paths_to_add:
-                current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-                for lib_path in lib_paths_to_add:
-                    if lib_path not in current_ld_path:
-                        current_ld_path = f"{lib_path}:{current_ld_path}" if current_ld_path else lib_path
-                os.environ["LD_LIBRARY_PATH"] = current_ld_path
+        # Add DCNv2 (other/dcnv2) to sys.path so the _ext native module is importable
+        if not _DCNV2_PATH.is_dir():
+            raise FileNotFoundError(
+                f"DCNv2 submodule not found at {_DCNV2_PATH}. "
+                "Run: git submodule update --init other/dcnv2"
+            )
+        ext_files = list(_DCNV2_PATH.glob("_ext*.so")) + list(_DCNV2_PATH.glob("_ext*.pyd"))
+        if not ext_files:
+            raise ImportError(
+                f"DCNv2 extension not built at {_DCNV2_PATH}. "
+                f"To build: cd {_DCNV2_PATH} && python setup.py build_ext --inplace"
+            )
+        dcnv2_str = str(_DCNV2_PATH)
+        if dcnv2_str not in sys.path:
+            sys.path.insert(0, dcnv2_str)
 
         try:
             from modeling.TP_Net import Res160, Res320
             from utils.reconstruct import TPS_line
             from utils.utils import load_model
         except ImportError as e:
-            error_msg = str(e)
-            # Check if it's the DCNv2 _ext module that's missing
-            if "_ext" in error_msg or "dcn_v2" in error_msg.lower() or "No module named '_ext'" in error_msg:
-                raise ImportError(
-                    f"Failed to import TP-LSD: DCNv2 extension not built. "
-                    f"To fix: cd {dcnv2_path} && python setup.py build_ext --inplace. "
-                    f"See {dcnv2_path}/README.md for details. "
-                    f"Original error: {e}"
-                ) from e
-            else:
-                raise ImportError(
-                    f"Failed to import TP-LSD modules from {root}. "
-                    "Make sure DCNv2 is built (see modeling/DCNv2/README.md). "
-                    f"Original error: {e}"
-                ) from e
+            raise ImportError(
+                f"Failed to import TP-LSD modules from {root}. "
+                f"Original error: {e}"
+            ) from e
 
         head = {"center": 1, "dis": 4, "line": 1}
         var = self.conf.tplsd_variant
@@ -196,35 +153,8 @@ class TPLSD(BaseModel):
                 f"Download {ckpt_name} from TP-LSD releases/pretraineds and put it in {ckpt.parent}. "
                 f"See https://github.com/Siyuada7/TP-LSD for download links."
             )
-        # Check if DCNv2 has CUDA support before deciding device
-        # If DCNv2 is CPU-only (256KB), we must use CPU even if CUDA is available
-        # CUDA-enabled builds are ~850KB. This matches the notebook behavior.
-        device = "cpu"  # Default to CPU (safe for CPU-only DCNv2 builds)
-        dcnv2_path = root / "modeling" / "DCNv2"
-        ext_files = list(dcnv2_path.glob("_ext*.so"))
-        if ext_files:
-            # Check extension size: CPU-only ~256KB, CUDA-enabled ~850KB
-            ext_size = ext_files[0].stat().st_size
-            has_cuda_support = ext_size > 500000  # >500KB indicates CUDA support
-            
-            if not has_cuda_support:
-                # DCNv2 is CPU-only, force CPU mode (like the notebook does)
-                device = "cpu"
-            elif has_cuda_support and torch.cuda.is_available():
-                try:
-                    # Test CUDA actually works
-                    test_tensor = torch.zeros(1, device="cuda")
-                    test_result = test_tensor + 1
-                    del test_tensor, test_result
-                    torch.cuda.empty_cache()
-                    device = "cuda"
-                except Exception:
-                    # CUDA not working, use CPU
-                    device = "cpu"
-        
-        device = torch.device(device)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.net = self.load_tplsd_model(ckpt, device)
-        # Mark model as initialized since weights are loaded
         self.set_initialized(True)
 
     def _preprocess_tplsd(self, img_bgr, in_res):
