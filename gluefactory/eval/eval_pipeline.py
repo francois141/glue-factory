@@ -110,8 +110,9 @@ class EvalPipeline:
                 assert (
                     overwrite
                 ), "configs changed, add --overwrite to rerun experiment with new conf"
-            if saved_conf.eval != self.conf.eval:
-                assert (
-                    overwrite or overwrite_eval
-                ), "eval configs changed, add --overwrite_eval to rerun evaluation"
+            if "eval" in saved_conf and "eval" in self.conf:
+                if saved_conf.eval != self.conf.eval:
+                    assert (
+                        overwrite or overwrite_eval
+                    ), "eval configs changed, add --overwrite_eval to rerun evaluation"
         OmegaConf.save(self.conf, experiment_dir / "conf.yaml")
