@@ -32,6 +32,8 @@ CONFIGS=(
     "scalelsd|gluefactory/configs/eval/scalelsd+LM.yaml|scalelsd"
     "sold2|gluefactory/configs/eval/sold2+LM.yaml|sold2"
     "lsd|gluefactory/configs/eval/lsd+LM.yaml|lsd"
+    "M-LSD|gluefactory/configs/eval/mlsd+LM.yaml|mlsd"
+    "TP-LSD|gluefactory/configs/eval/tplsd+LM.yaml|tplsd"
 )
 
 # Run evaluations

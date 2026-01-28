@@ -34,6 +34,8 @@ CONFIGS=(
     "Running LSD|gluefactory/configs/timing_eval/lines_only_lsd.yaml|ablation_lsd.txt"
     "Running fast LSD|gluefactory/configs/timing_eval/lines_only_fastlsd.yaml|ablation_fast_lsd.txt"
     "Running gpu LSD|gluefactory/configs/timing_eval/lines_only_lsd_points.yaml|ablation_gpu_lsd.txt"
+    "Running MLSD|gluefactory/configs/timing_eval/lines_only_mlsd.yaml|ablation_mlsd.txt"
+    "Running TP-LSD|gluefactory/configs/timing_eval/lines_only_tplsd.yaml|ablation_tplsd.txt"
     "Running ALIKED|gluefactory/configs/timing_eval/points_only_aliked.yaml|points_only_aliked.txt"
     "Running DaD|gluefactory/configs/timing_eval/points_only_dad.yaml|points_only_dad.txt"
     "Running DISK|gluefactory/configs/timing_eval/points_only_disk.yaml|points_only_disk.txt"

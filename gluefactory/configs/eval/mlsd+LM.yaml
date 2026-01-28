@@ -1,0 +1,14 @@
+model:
+  name: two_view_pipeline
+  extractor:
+    name: lines.mlsd
+    run_type: default
+  matcher:
+    name: matchers.line_matcher
+    line_dist: orth
+benchmarks:
+  hpatches_lines:
+    data:
+      preprocessing:
+        side: long
+        resize: 800

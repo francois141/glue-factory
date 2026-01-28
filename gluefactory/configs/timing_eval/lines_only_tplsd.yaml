@@ -1,0 +1,26 @@
+model:
+  name: lines.tplsd
+  tplsd_variant: tplite  # or tp320, tp512
+  min_length: 15
+  max_num_lines: null
+  force_num_lines: false
+  tps_thresh: 0.25
+  tps_lmbd: 0.5
+  # tplsd_root: null  # path to TP-LSD repo; if unset, uses THIRD_PARTY_PATH/TP-LSD
+data:
+  name: gluefactory.datasets.oxford_paris_mini_1view_jpldd
+  data_dir: "revisitop1m_POLD2/jpg"  # as subdirectory of DATA_PATH(defined in settings.py)
+  split: 'val'  # split must be selected
+  grayscale: False
+  num_workers: 1
+  train_batch_size: 1
+  val_batch_size: 1
+  prefetch_factor: 1
+  reshape: [800, 800]
+  square_pad: False
+  multiscale_learning:
+    do: False
+  load_features:
+    do: False
+  val_size: 500
+  train_size: 11500
