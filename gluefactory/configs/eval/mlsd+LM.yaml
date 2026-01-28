@@ -1,0 +1,24 @@
+model:
+  name: two_view_pipeline
+  extractor:
+    name: lines.mlsd
+    run_type: default
+  matcher:
+    name: matchers.line_matcher
+    line_dist: orth
+benchmarks:
+  megadepth1500:
+    data:
+      preprocessing:
+        side: long
+        resize: 1600
+    eval:
+      estimator: opencv
+      ransac_th: 1.0
+  hpatches_lines:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+    use_points: False
+    use_lines: True

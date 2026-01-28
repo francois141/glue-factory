@@ -1,0 +1,30 @@
+model:
+  name: two_view_pipeline
+  extractor:
+    name: lines.tplsd
+    tplsd_variant: tplite  # or tp320, tp512
+    min_length: 15
+    max_num_lines: null
+    force_num_lines: false
+    tps_thresh: 0.25
+    tps_lmbd: 0.5
+    # tplsd_root: null  # path to TP-LSD repo; if unset, uses THIRD_PARTY_PATH/TP-LSD
+  matcher:
+    name: matchers.line_matcher
+    line_dist: orth
+benchmarks:
+  megadepth1500:
+    data:
+      preprocessing:
+        side: long
+        resize: 1600
+    eval:
+      estimator: opencv
+      ransac_th: 1.0
+  hpatches_lines:
+    data:
+      preprocessing:
+        side: long
+        resize: 800
+    use_points: False
+    use_lines: True
