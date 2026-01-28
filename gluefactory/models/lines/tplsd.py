@@ -1,0 +1,378 @@
+"""
+TP-LSD wrapper. Requires the TP-LSD repo (with DCNv2 built) at tplsd_root.
+See: https://github.com/Siyuada7/TP-LSD
+
+TP-LSD (Tri-Points Based Line Segment Detector) is a deep learning-based line detector
+that uses a tri-points representation (root-point and two endpoints) for line detection.
+
+Output format:
+    - lines: [B, N, 2, 2] tensor (or list) with line endpoints in (x, y) pixel coordinates
+    - line_scores: [B, N] tensor (or list) with scores (sqrt of line length)
+    - valid_lines: [B, N] bool tensor (or list) indicating valid vs padded lines
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+
+from ...settings import DATA_PATH, THIRD_PARTY_PATH
+from ..base_model import BaseModel
+
+# Default location for TP-LSD clone when tplsd_root is not set
+_DEFAULT_TPLSD_ROOT = THIRD_PARTY_PATH / "TP-LSD"
+
+
+class TPLSD(BaseModel):
+    """
+    TP-LSD (Tri-Points Based Line Segment Detector) line detector.
+    
+    This is a wrapper around the TP-LSD implementation from:
+    https://github.com/Siyuada7/TP-LSD
+    
+    Setup requirements:
+        1. Clone TP-LSD repo to third_party/TP-LSD (or set tplsd_root)
+        2. Build DCNv2 (see modeling/DCNv2/README.md in TP-LSD repo)
+        3. Download pretrained weights (Res160.pth, Res320.pth, or Res512.pth)
+           and place them in pretraineds/ directory
+    
+    Configuration:
+        - tplsd_variant: Model variant ("tp320", "tplite", or "tp512")
+            * "tp320": Res320 model, 320x320 input, uses Res320.pth
+            * "tplite": Res160 model (lite version), 320x320 input, uses Res160.pth
+            * "tp512": Res320 model, 512x512 input, uses Res512.pth
+            Note: Hourglass model ("hg") is not currently supported
+        - tplsd_root: Path to TP-LSD repo (default: THIRD_PARTY_PATH/TP-LSD)
+        - min_length: Minimum line length in pixels (default: 15)
+        - max_num_lines: Maximum number of lines to return (default: None = no limit)
+        - force_num_lines: If True, pad output to max_num_lines (default: False)
+        - tps_thresh: Threshold for tri-points detection (default: 0.25, matches official demo)
+        - tps_lmbd: Lambda parameter for line segmentation (default: 0.5, matches official demo)
+    """
+    default_conf = {
+        "tplsd_variant": "tplite",  # "tp320" | "tplite" | "tp512"
+        "tplsd_root": None,  # Path to TP-LSD repo; if None, uses THIRD_PARTY_PATH/TP-LSD
+        "min_length": 15,
+        "max_num_lines": None,
+        "force_num_lines": False,
+        "tps_thresh": 0.25,
+        "tps_lmbd": 0.5,
+    }
+
+    required_data_keys = ["image"]
+
+    def _get_tplsd_root(self):
+        root = self.conf.tplsd_root
+        if root is None:
+            root = _DEFAULT_TPLSD_ROOT
+        root = Path(root).expanduser().resolve()
+        if not root.is_dir():
+            # When using default path, try to clone TP-LSD (same pattern as install.sh / submodules)
+            if self.conf.tplsd_root is None and root == _DEFAULT_TPLSD_ROOT.resolve():
+                try:
+                    root.parent.mkdir(parents=True, exist_ok=True)
+                    subprocess.run(
+                        ["git", "clone", "--depth", "1", "https://github.com/Siyuada7/TP-LSD", str(root)],
+                        check=True, capture_output=True, text=True, timeout=120
+                    )
+                except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+                    pass
+            if not root.is_dir():
+                raise FileNotFoundError(
+                    f"TP-LSD repo not found at {root}. "
+                    "To set up: mkdir -p third_party && git clone --depth 1 https://github.com/Siyuada7/TP-LSD third_party/TP-LSD. "
+                    "Then build DCNv2 (see modeling/DCNv2/README.md), place Res320.pth/Res160.pth in pretraineds/, "
+                    "or set extractor.tplsd_root to your TP-LSD path."
+                )
+        return root
+
+    def load_tplsd_model(self, ckpt_path, device):
+        root = self._get_tplsd_root()
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+
+        # Check if DCNv2 is built before attempting import
+        dcnv2_path = root / "modeling" / "DCNv2"
+        if dcnv2_path.exists():
+            # Look for compiled extension
+            ext_files = list(dcnv2_path.glob("_ext*.so")) + list(dcnv2_path.glob("_ext*.pyd"))
+            if not ext_files:
+                raise ImportError(
+                    f"DCNv2 extension not built. "
+                    f"To build: cd {dcnv2_path} && python setup.py build_ext --inplace. "
+                    f"See {dcnv2_path}/README.md for details."
+                )
+            # Add DCNv2 directory to path so _ext module can be found
+            dcnv2_str = str(dcnv2_path)
+            if dcnv2_str not in sys.path:
+                sys.path.insert(0, dcnv2_str)
+            
+            # Set LD_LIBRARY_PATH to include PyTorch libraries (libc10.so, libtorch_cpu.so, etc.)
+            # This is critical for loading the DCNv2 extension which depends on PyTorch CUDA libraries
+            import os
+            lib_paths_to_add = []
+            
+            # Add conda/lib for general CUDA libraries (including libcudart.so)
+            conda_prefix = os.environ.get("CONDA_PREFIX", "")
+            if conda_prefix:
+                lib_path = os.path.join(conda_prefix, "lib")
+                if os.path.exists(lib_path):
+                    lib_paths_to_add.append(lib_path)
+                # Also check for cuda/lib64 subdirectory
+                cuda_lib_path = os.path.join(conda_prefix, "cuda", "lib64")
+                if os.path.exists(cuda_lib_path):
+                    lib_paths_to_add.append(cuda_lib_path)
+            
+            # Add PyTorch lib directory (more reliable than searching sys.path)
+            try:
+                import torch
+                torch_dir = os.path.dirname(torch.__file__)
+                torch_lib_path = os.path.join(torch_dir, "lib")
+                if os.path.exists(torch_lib_path):
+                    lib_paths_to_add.append(torch_lib_path)
+            except ImportError:
+                pass  # PyTorch not available, will fail later anyway
+            
+            # Update LD_LIBRARY_PATH
+            if lib_paths_to_add:
+                current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+                for lib_path in lib_paths_to_add:
+                    if lib_path not in current_ld_path:
+                        current_ld_path = f"{lib_path}:{current_ld_path}" if current_ld_path else lib_path
+                os.environ["LD_LIBRARY_PATH"] = current_ld_path
+
+        try:
+            from modeling.TP_Net import Res160, Res320
+            from utils.reconstruct import TPS_line
+            from utils.utils import load_model
+        except ImportError as e:
+            error_msg = str(e)
+            # Check if it's the DCNv2 _ext module that's missing
+            if "_ext" in error_msg or "dcn_v2" in error_msg.lower() or "No module named '_ext'" in error_msg:
+                raise ImportError(
+                    f"Failed to import TP-LSD: DCNv2 extension not built. "
+                    f"To fix: cd {dcnv2_path} && python setup.py build_ext --inplace. "
+                    f"See {dcnv2_path}/README.md for details. "
+                    f"Original error: {e}"
+                ) from e
+            else:
+                raise ImportError(
+                    f"Failed to import TP-LSD modules from {root}. "
+                    "Make sure DCNv2 is built (see modeling/DCNv2/README.md). "
+                    f"Original error: {e}"
+                ) from e
+
+        head = {"center": 1, "dis": 4, "line": 1}
+        var = self.conf.tplsd_variant
+        if var == "tp320":
+            model = Res320(task_dim=head)
+            self._in_res = (320, 320)
+        elif var == "tplite":
+            model = Res160(task_dim=head, size=320)
+            self._in_res = (320, 320)
+        elif var == "tp512":
+            model = Res320(task_dim=head)
+            self._in_res = (512, 512)
+        else:
+            raise ValueError(f"tplsd_variant must be tp320, tplite, or tp512, got {var}")
+
+        model = load_model(model, str(ckpt_path))
+        self._TPS_line = TPS_line
+        return model.eval().to(device)
+
+    def _init(self, conf):
+        if self.conf.force_num_lines:
+            assert self.conf.max_num_lines is not None, "Missing max_num_lines parameter"
+        root = self._get_tplsd_root()
+        var = self.conf.tplsd_variant
+        ckpt_name = {"tp320": "Res320.pth", "tplite": "Res160.pth", "tp512": "Res512.pth"}[var]
+        ckpt = root / "pretraineds" / ckpt_name
+        if not ckpt.is_file():
+            raise FileNotFoundError(
+                f"TP-LSD weights not found at {ckpt}. "
+                f"Download {ckpt_name} from TP-LSD releases/pretraineds and put it in {ckpt.parent}. "
+                f"See https://github.com/Siyuada7/TP-LSD for download links."
+            )
+        # Check if DCNv2 has CUDA support before deciding device
+        # If DCNv2 is CPU-only (256KB), we must use CPU even if CUDA is available
+        # CUDA-enabled builds are ~850KB. This matches the notebook behavior.
+        device = "cpu"  # Default to CPU (safe for CPU-only DCNv2 builds)
+        dcnv2_path = root / "modeling" / "DCNv2"
+        ext_files = list(dcnv2_path.glob("_ext*.so"))
+        if ext_files:
+            # Check extension size: CPU-only ~256KB, CUDA-enabled ~850KB
+            ext_size = ext_files[0].stat().st_size
+            has_cuda_support = ext_size > 500000  # >500KB indicates CUDA support
+            
+            if not has_cuda_support:
+                # DCNv2 is CPU-only, force CPU mode (like the notebook does)
+                device = "cpu"
+            elif has_cuda_support and torch.cuda.is_available():
+                try:
+                    # Test CUDA actually works
+                    test_tensor = torch.zeros(1, device="cuda")
+                    test_result = test_tensor + 1
+                    del test_tensor, test_result
+                    torch.cuda.empty_cache()
+                    device = "cuda"
+                except Exception:
+                    # CUDA not working, use CPU
+                    device = "cpu"
+        
+        device = torch.device(device)
+        self.net = self.load_tplsd_model(ckpt, device)
+        # Mark model as initialized since weights are loaded
+        self.set_initialized(True)
+
+    def _preprocess_tplsd(self, img_bgr, in_res):
+        """
+        Preprocess image for TP-LSD: resize and apply HSV V-channel enhancement.
+        
+        This matches the official TP-LSD preprocessing from demo_line.py:
+        - Resize to target resolution
+        - Convert to HSV
+        - Apply V-channel enhancement (downscale, blur, upscale, blur, subtract from original)
+        - Convert back to BGR and normalize to [0, 1]
+        
+        Args:
+            img_bgr: BGR image [H, W, 3] as numpy array [0, 255]
+            in_res: Target resolution (H, W) tuple
+            
+        Returns:
+            Preprocessed image [H, W, 3] as float32 [0, 1], and actual (H, W)
+        """
+        # Resize to target resolution (matches demo_line.py line 296)
+        inp = cv2.resize(img_bgr, (in_res[1], in_res[0]), interpolation=cv2.INTER_AREA)
+        H, W, C = inp.shape
+        
+        # Convert to HSV and extract V channel (matches demo_line.py lines 298-299)
+        hsv = cv2.cvtColor(inp, cv2.COLOR_BGR2HSV)
+        imgv0 = hsv[..., 2]
+        
+        # V-channel enhancement: downscale, blur, upscale, blur (matches demo_line.py lines 300-303)
+        imgv = cv2.resize(imgv0, (0, 0), fx=1.0 / 4, fy=1.0 / 4, interpolation=cv2.INTER_LINEAR)
+        imgv = cv2.GaussianBlur(imgv, (5, 5), 3)
+        imgv = cv2.resize(imgv, (W, H), interpolation=cv2.INTER_LINEAR)
+        imgv = cv2.GaussianBlur(imgv, (5, 5), 3)
+        
+        # Subtract blurred from original and add 127.5 (matches demo_line.py lines 305-306)
+        imgv1 = imgv0.astype(np.float32) - imgv + 127.5
+        imgv1 = np.clip(imgv1, 0, 255).astype(np.uint8)
+        hsv[..., 2] = imgv1
+        
+        # Convert back to BGR and normalize (matches demo_line.py lines 308-310)
+        inp = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        return inp.astype(np.float32) / 255.0, H, W
+
+    def _forward(self, data):
+        """
+        Forward pass for TP-LSD line detection.
+        
+        Args:
+            data: dict with 'image' tensor [B, C, H, W] in RGB format [0, 1]
+            
+        Returns:
+            dict with:
+                - 'lines': [B, N, 2, 2] tensor (or list) with line endpoints (x, y)
+                - 'line_scores': [B, N] tensor (or list) with scores
+                - 'valid_lines': [B, N] bool tensor (or list) indicating valid lines
+        """
+        image = data["image"]
+        lines, line_scores, valid_lines = [], [], []
+        in_res = self._in_res
+        TPS_line = self._TPS_line
+        device = next(self.net.parameters()).device
+
+        for i in range(len(image)):
+            im = image[i]
+            if im.shape[0] == 3:
+                # CHW [0,1] RGB -> HWC BGR [0,255]
+                rgb = (im.permute(1, 2, 0).cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+                img_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            else:
+                gray = (im[0].cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+                img_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+            H_img, W_img = img_bgr.shape[0], img_bgr.shape[1]
+            inp, H, W = self._preprocess_tplsd(img_bgr, in_res)
+            inp_t = torch.from_numpy(inp.transpose(2, 0, 1)).unsqueeze(0).float().to(device)
+
+            # Forward pass (matches demo_line.py lines 312-313)
+            with torch.no_grad():
+                outputs = self.net(inp_t)
+            
+            # Get last output (model returns list with single dict) - matches demo_line.py line 286
+            output = outputs[-1]
+            
+            # Extract line segments using TPS_line reconstruction (matches demo_line.py line 287)
+            # Default thresholds in official demo: thresh=0.25, lmbd=0.5
+            segs, _, _, _, _ = TPS_line(
+                output,
+                thresh=self.conf.tps_thresh,
+                lmbd=self.conf.tps_lmbd,
+                H=H,
+                W=W,
+            )
+            # Scale coordinates from resized (H, W) to original image size
+            # Matches demo_line.py lines 288-291
+            if len(segs) > 0:
+                segs = segs.astype(np.float32)
+                W_ = W_img / W
+                H_ = H_img / H
+                segs[:, [0, 2]] *= W_  # Scale x coordinates
+                segs[:, [1, 3]] *= H_  # Scale y coordinates
+                # Reshape from [N, 4] (x1, y1, x2, y2) to [N, 2, 2] (start, end)
+                line_pred = segs.reshape(-1, 2, 2)
+            else:
+                line_pred = np.zeros((0, 2, 2), dtype=np.float32)
+
+            lengths = np.linalg.norm(line_pred[:, 1] - line_pred[:, 0], axis=1)
+            to_keep = lengths >= self.conf.min_length
+            line_pred = line_pred[to_keep]
+            lengths = lengths[to_keep]
+            scores = np.sqrt(lengths)
+
+            if self.conf.max_num_lines is not None:
+                order = np.argsort(-scores)[: self.conf.max_num_lines]
+                line_pred = line_pred[order]
+                scores = scores[order]
+
+            n = len(line_pred)
+            valid_mask = np.ones(n, dtype=bool)
+            if self.conf.force_num_lines and self.conf.max_num_lines is not None:
+                pad = self.conf.max_num_lines - n
+                if pad > 0:
+                    line_pred = np.concatenate(
+                        [line_pred, np.zeros((pad, 2, 2), dtype=np.float32)], axis=0
+                    )
+                    scores = np.concatenate([scores, np.zeros(pad, dtype=np.float32)], axis=0)
+                    valid_mask = np.concatenate([valid_mask, np.zeros(pad, dtype=bool)], axis=0)
+
+            lines.append(line_pred)
+            line_scores.append(scores)
+            valid_lines.append(valid_mask)
+
+        if len(image) == 1 or self.conf.force_num_lines:
+            lines = (
+                torch.from_numpy(np.stack(lines, axis=0).astype(np.float32))
+                .to(image.device)
+                .float()
+            )
+            line_scores = (
+                torch.from_numpy(np.stack(line_scores, axis=0).astype(np.float32))
+                .to(image.device)
+                .float()
+            )
+            valid_lines = (
+                torch.from_numpy(np.stack(valid_lines, axis=0).astype(np.uint8))
+                .to(image.device)
+                .bool()
+            )
+
+        return {"lines": lines, "line_scores": line_scores, "valid_lines": valid_lines}
+
+    def loss(self, pred, data):
+        raise NotImplementedError

@@ -29,15 +29,16 @@ BENCHMARKS=(
 # Format: "Display Name|full_config_path|output_suffix"
 CONFIGS=(
     "PLNet|gluefactory/configs/eval/plnet+LM.yaml|plnet"
-    #"Suarez|gluefactory/configs/eval/suarez+LM.yaml|wireframe_suarez"
-    #"JPL|gluefactory/configs/eval/jpl+LM.yaml|jpl"
-    #"JPL with ferrari LSD|gluefactory/configs/eval/jpl+points_lsd+LM.yaml|jpl_ferrari_lsd"
-    #"deeplsd|gluefactory/configs/eval/deeplsd+AF+LM.yaml|deeplsd"
-    #"deeplsd without angle field|gluefactory/configs/eval/deeplsd+LM.yaml|deeplsd_without_af"
-    #"scalelsd|gluefactory/configs/eval/scalelsd+LM.yaml|scalelsd"
-    #"sold2|gluefactory/configs/eval/sold2+LM.yaml|sold2"
-    #"lsd|gluefactory/configs/eval/lsd+LM.yaml|lsd"
-    #"fast_lsd|gluefactory/configs/eval/fastlsd+LM.yaml|fast_lsd"
+    "Suarez|gluefactory/configs/eval/suarez+LM.yaml|wireframe_suarez"
+    "JPL|gluefactory/configs/eval/jpl+LM.yaml|jpl"
+    "JPL with ferrari LSD|gluefactory/configs/eval/jpl+points_lsd+LM.yaml|jpl_ferrari_lsd"
+    "deeplsd|gluefactory/configs/eval/deeplsd+AF+LM.yaml|deeplsd"
+    "deeplsd without angle field|gluefactory/configs/eval/deeplsd+LM.yaml|deeplsd_without_af"
+    "scalelsd|gluefactory/configs/eval/scalelsd+LM.yaml|scalelsd"
+    "sold2|gluefactory/configs/eval/sold2+LM.yaml|sold2"
+    "lsd|gluefactory/configs/eval/lsd+LM.yaml|lsd"
+    "M-LSD|gluefactory/configs/eval/mlsd+LM.yaml|mlsd"
+    "TP-LSD|gluefactory/configs/eval/tplsd+LM.yaml|tplsd"
 )
 
 # Run evaluations

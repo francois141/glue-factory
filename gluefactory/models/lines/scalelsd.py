@@ -43,8 +43,20 @@ class ScaleLSD(BaseModel):
         if not ckpt.is_file():
             self.download_model(ckpt)
 
-        # TODO: Replace this part
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Test CUDA actually works before using it (handles broken CUDA runtime)
+        device = "cpu"
+        if torch.cuda.is_available():
+            try:
+                # Actually test CUDA with a real operation
+                test_tensor = torch.zeros(1, device="cuda")
+                test_result = test_tensor + 1
+                del test_tensor, test_result
+                torch.cuda.empty_cache()
+                device = "cuda"
+            except Exception:
+                # CUDA reports available but runtime fails - use CPU
+                device = "cpu"
+        
         self.net = self.load_scalelsd_model(ckpt, device)
 
     def download_model(self, path):
