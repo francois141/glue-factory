@@ -1,5 +1,5 @@
 """
-TP-LSD wrapper. Requires the TP-LSD repo (with DCNv2 built) at tplsd_root.
+TP-LSD wrapper. Uses the TP-LSD submodule at other/TPLSD (auto-initialized).
 See: https://github.com/Siyuada7/TP-LSD
 
 TP-LSD (Tri-Points Based Line Segment Detector) is a deep learning-based line detector
@@ -19,13 +19,14 @@ import cv2
 import numpy as np
 import torch
 
-from ...settings import THIRD_PARTY_PATH
 from ..base_model import BaseModel
 
-# Default location for TP-LSD clone when tplsd_root is not set
-_DEFAULT_TPLSD_ROOT = THIRD_PARTY_PATH / "TP-LSD"
+# Repository root (glue-factory-new/)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+# Default location for TP-LSD submodule
+_DEFAULT_TPLSD_ROOT = _REPO_ROOT / "other" / "TPLSD"
 # DCNv2 extension (separate submodule at other/dcnv2)
-_DCNV2_PATH = Path(__file__).resolve().parents[3] / "other" / "dcnv2"
+_DCNV2_PATH = _REPO_ROOT / "other" / "dcnv2"
 
 
 class TPLSD(BaseModel):
@@ -36,10 +37,11 @@ class TPLSD(BaseModel):
     https://github.com/Siyuada7/TP-LSD
     
     Setup requirements:
-        1. Clone TP-LSD repo to third_party/TP-LSD (or set tplsd_root)
-        2. Build DCNv2 (see modeling/DCNv2/README.md in TP-LSD repo)
+        1. Initialize submodules: git submodule update --init other/TPLSD other/dcnv2
+           (done automatically if the directories are empty)
+        2. Build DCNv2: cd other/dcnv2 && python setup.py build_ext --inplace
         3. Download pretrained weights (Res160.pth, Res320.pth, or Res512.pth)
-           and place them in pretraineds/ directory
+           and place them in other/TPLSD/pretraineds/
     
     Configuration:
         - tplsd_variant: Model variant ("tp320", "tplite", or "tp512")
@@ -47,7 +49,7 @@ class TPLSD(BaseModel):
             * "tplite": Res160 model (lite version), 320x320 input, uses Res160.pth
             * "tp512": Res320 model, 512x512 input, uses Res512.pth
             Note: Hourglass model ("hg") is not currently supported
-        - tplsd_root: Path to TP-LSD repo (default: THIRD_PARTY_PATH/TP-LSD)
+        - tplsd_root: Path to TP-LSD repo (default: other/TPLSD submodule)
         - min_length: Minimum line length in pixels (default: 15)
         - max_num_lines: Maximum number of lines to return (default: None = no limit)
         - force_num_lines: If True, pad output to max_num_lines (default: False)
@@ -56,7 +58,7 @@ class TPLSD(BaseModel):
     """
     default_conf = {
         "tplsd_variant": "tplite",  # "tp320" | "tplite" | "tp512"
-        "tplsd_root": None,  # Path to TP-LSD repo; if None, uses THIRD_PARTY_PATH/TP-LSD
+        "tplsd_root": None,  # Path to TP-LSD repo; if None, uses other/TPLSD submodule
         "min_length": 15,
         "max_num_lines": None,
         "force_num_lines": False,
@@ -66,27 +68,33 @@ class TPLSD(BaseModel):
 
     required_data_keys = ["image"]
 
+    @staticmethod
+    def _init_submodule(submodule_path):
+        """Run git submodule update --init for a submodule if it is empty or missing."""
+        path = Path(submodule_path)
+        if path.is_dir() and any(path.iterdir()):
+            return  # already populated
+        print(f"Initializing submodule at {path} ...")
+        subprocess.run(
+            ["git", "submodule", "update", "--init", str(path.relative_to(_REPO_ROOT))],
+            cwd=str(_REPO_ROOT),
+            check=True,
+            timeout=120,
+        )
+
     def _get_tplsd_root(self):
         root = self.conf.tplsd_root
         if root is None:
             root = _DEFAULT_TPLSD_ROOT
         root = Path(root).expanduser().resolve()
-        if not root.is_dir():
-            # When using default path, try to clone TP-LSD (same pattern as install.sh / submodules)
-            if self.conf.tplsd_root is None and root == _DEFAULT_TPLSD_ROOT.resolve():
-                try:
-                    root.parent.mkdir(parents=True, exist_ok=True)
-                    subprocess.run(
-                        ["git", "clone", "--depth", "1", "https://github.com/Siyuada7/TP-LSD", str(root)],
-                        check=True, capture_output=True, text=True, timeout=120
-                    )
-                except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-                    pass
-            if not root.is_dir():
+        if not root.is_dir() or not any(root.iterdir()):
+            # Auto-init the submodule when using the default path
+            if self.conf.tplsd_root is None:
+                self._init_submodule(root)
+            if not root.is_dir() or not any(root.iterdir()):
                 raise FileNotFoundError(
                     f"TP-LSD repo not found at {root}. "
-                    "To set up: mkdir -p third_party && git clone --depth 1 https://github.com/Siyuada7/TP-LSD third_party/TP-LSD. "
-                    "Then build DCNv2 (see modeling/DCNv2/README.md), place Res320.pth/Res160.pth in pretraineds/, "
+                    "Run: git submodule update --init other/TPLSD  "
                     "or set extractor.tplsd_root to your TP-LSD path."
                 )
         return root
@@ -97,6 +105,8 @@ class TPLSD(BaseModel):
             sys.path.insert(0, str(root))
 
         # Add DCNv2 (other/dcnv2) to sys.path so the _ext native module is importable
+        if not _DCNV2_PATH.is_dir() or not any(_DCNV2_PATH.iterdir()):
+            self._init_submodule(_DCNV2_PATH)
         if not _DCNV2_PATH.is_dir():
             raise FileNotFoundError(
                 f"DCNv2 submodule not found at {_DCNV2_PATH}. "
