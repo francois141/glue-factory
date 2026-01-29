@@ -69,6 +69,7 @@ if __name__ == "__main__":
         "--num_s", type=int, default=100, help="Number of timing samples."
     )
     parser.add_argument("--device", choices=["cpu", "mps", "cuda"], default="cuda")
+    parser.add_argument("--multiple_size", action="store_true")
     args = parser.parse_args()
 
     default_conf = OmegaConf.create(default_conf)
@@ -115,22 +116,23 @@ if __name__ == "__main__":
         batch_size=dataloader.batch_size,
     ))
 
-    print("=== Now running the latency over image size ===")
+    if args.multiple_size:
+        print("=== Now running the latency over image size ===")
 
-    sizes = [64, 128, 256, 512, 1024, 2048]
+        sizes = [64, 128, 256, 512, 1024, 2048]
 
-    outputs = []
-    for size in sizes:
-        outputs.append(measure_performance(
-            dataloader=get_dataset_and_loader(dset_conf, size=size),
-            model=model,
-            num_s=args.num_s,
-            device=args.device,
-            batch_size=dataloader.batch_size,
-        ))
+        outputs = []
+        for size in sizes:
+            outputs.append(measure_performance(
+                dataloader=get_dataset_and_loader(dset_conf, size=size),
+                model=model,
+                num_s=args.num_s,
+                device=args.device,
+                batch_size=dataloader.batch_size,
+            ))
 
-    print("=== Sizes ===")
-    print(sizes)
+        print("=== Sizes ===")
+        print(sizes)
 
-    print("=== Latencies ===")
-    print(outputs)
+        print("=== Latencies ===")
+        print(outputs)
