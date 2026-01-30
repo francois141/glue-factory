@@ -114,18 +114,22 @@ class PLNet(BaseModel):
                 
         juncs = out['juncs_pred'] # [N, 2]
         junc_scores = out['juncs_score'] # [N]
-        
+        juncs_desc = out.get('juncs_desc')  # [N, 256] or None
+
         # Filter junctions by padding and threshold
         if pad_h > 0 or pad_w > 0:
             mask = (juncs[:, 0] < W) & (juncs[:, 1] < H)
             juncs = juncs[mask]
             junc_scores = junc_scores[mask]
-   
-            
+            if juncs_desc is not None:
+                juncs_desc = juncs_desc[mask]
+
         # Keep top-k junctions (skip if num_keypoints is explicitly set)
         if self.conf.num_keypoints is None and len(juncs) > self.conf.max_num_junctions:
             junc_scores, indices = torch.topk(junc_scores, self.conf.max_num_junctions)
             juncs = juncs[indices]
+            if juncs_desc is not None:
+                juncs_desc = juncs_desc[indices]
 
         # Lines
         lines = out['lines_pred'].reshape(-1, 2, 2) # [M, 2, 2]
@@ -137,19 +141,24 @@ class PLNet(BaseModel):
                     (lines[:, 1, 0] < W) & (lines[:, 1, 1] < H)
             lines = lines[mask]
             line_scores = line_scores[mask]
-        
+
         # Keep top-k lines
         if len(lines) > self.conf.max_num_lines:
             line_scores, indices = torch.topk(line_scores, self.conf.max_num_lines)
             lines = lines[indices]
 
-        return {
+        result = {
             "keypoints": juncs[None],
             "keypoint_scores": junc_scores[None],
             "lines": lines[None],
             "line_scores": line_scores[None],
             "valid_lines": torch.ones_like(line_scores)[None],
         }
+
+        if juncs_desc is not None:
+            result["descriptors"] = juncs_desc[None]  # [1, N, 256]
+
+        return result
 
     def loss(self, pred, data):
         """
