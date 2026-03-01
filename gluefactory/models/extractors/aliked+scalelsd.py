@@ -15,13 +15,19 @@ class AlikedScaleLSD(BaseModel):
         "max_num_keypoints": 2048,
         "detection_threshold": -1,
         "force_num_keypoints": False,
+        "max_num_lines": None,
+        "force_num_lines": False,
     }
 
     def is_initialized(self):
         return True
 
     def _init(self, conf):
-        self.scalelsd = ScaleLSD({}).eval()
+        line_conf = {}
+        if conf.max_num_lines is not None:
+            line_conf["max_num_lines"] = conf.max_num_lines
+            line_conf["force_num_lines"] = conf.force_num_lines
+        self.scalelsd = ScaleLSD(line_conf).eval()
         self.aliked = ALIKED(
             {
                 "max_num_keypoints": conf.max_num_keypoints,

@@ -12,7 +12,9 @@ from ..base_model import BaseModel
 
 class DaDScaleLSD(BaseModel):
     default_conf = {
-        "max_num_keypoints": 1024
+        "max_num_keypoints": 1024,
+        "max_num_lines": None,
+        "force_num_lines": False,
     }
 
     def is_initialized(self):
@@ -22,7 +24,11 @@ class DaDScaleLSD(BaseModel):
         self.dad_detector = DadDetector({
             "max_num_keypoints": conf.max_num_keypoints
         }).eval()
-        self.scalelsd_detector = ScaleLSD({}).eval()
+        line_conf = {}
+        if conf.max_num_lines is not None:
+            line_conf["max_num_lines"] = conf.max_num_lines
+            line_conf["force_num_lines"] = conf.force_num_lines
+        self.scalelsd_detector = ScaleLSD(line_conf).eval()
 
     def _forward(self, data):
         with torch.no_grad():
