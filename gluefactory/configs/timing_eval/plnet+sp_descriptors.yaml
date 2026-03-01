@@ -4,7 +4,6 @@ model:
     detector:
         name: gluefactory.models.extractors.pl_net_extractor
         max_num_junctions: 1000
-        max_num_lines: 1000
         num_keypoints: 2048
     descriptor:
         name: gluefactory.models.extractors.superpoint

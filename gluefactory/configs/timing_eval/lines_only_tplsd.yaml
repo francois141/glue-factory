@@ -2,7 +2,6 @@ model:
   name: lines.tplsd
   tplsd_variant: tplite  # or tp320, tp512
   min_length: 15
-  max_num_lines: null
   force_num_lines: false
   tps_thresh: 0.25
   tps_lmbd: 0.5
