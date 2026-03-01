@@ -1,0 +1,13 @@
+Name,Latency,Reconstruction Quality,Category
+SAK (Ours),70,54.6,p+l
+SuperPoint + DeepLSD,293,49.6,p+l
+ALIKED + DeepLSD,286,49.6,p+l
+Wireframe,266,53.8 ,p+l
+SuperPoint,15.2,36.6,p
+ALIKED,17.6,35.0,p
+DISK,93.9,28.5,p
+"SAK (Ours, Points only)",17.6,49.1,p
+DaD + DeDoDev2,75.5,14.6,p
+SuperPoint + ScaleLSD,98,49.5,p+l
+ALIKED + ScaleLSD,92,49.4,p+l
+DaD + DeDoDev2 + ScaleLSD,147,49.8,p+l
