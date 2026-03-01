@@ -22,7 +22,7 @@ OUTPUT_DIR=$DIR/eval/line_evaluation
 # List of benchmarks to run - comment out any you don't want to run
 BENCHMARKS=(
     "hpatches_lines"
-    #"rdnim_lines"
+    "rdnim_lines"
 )
 
 # List of configs to evaluate - comment out any you don't want to run

@@ -3,6 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 from pprint import pprint
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -271,6 +272,15 @@ if __name__ == "__main__":
         overwrite_eval=args.overwrite_eval,
         plot=args.plot,
     )
+
+    pred_file = experiment_dir / "predictions.h5"
+    if pred_file.exists():
+        with h5py.File(str(pred_file), "r") as hf:
+            if "total_runtime_s" in hf.attrs:
+                total_rt = float(hf.attrs["total_runtime_s"])
+                n = int(hf.attrs["num_samples"])
+                s["extraction_runtime_total_s"] = round(total_rt, 3)
+                s["extraction_runtime_avg_s"] = round(total_rt / n, 5)
 
     # print results
     pprint(s)

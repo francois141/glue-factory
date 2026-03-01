@@ -4,6 +4,7 @@ Use a standalone script with `python3 -m dsfm.scipts.export_predictions dir`
 or call from another script.
 """
 
+import time
 from pathlib import Path
 
 import h5py
@@ -28,10 +29,20 @@ def export_predictions(
     Path(output_file).parent.mkdir(exist_ok=True, parents=True)
     hfile = h5py.File(str(output_file), "w")
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    use_cuda = device == "cuda"
     model = model.to(device).eval()
+    total_runtime = 0.0
+    num_samples = 0
     for data_ in tqdm(loader):
         data = batch_to_device(data_, device, non_blocking=True)
+        if use_cuda:
+            torch.cuda.synchronize()
+        t_start = time.perf_counter()
         pred = model(data)
+        if use_cuda:
+            torch.cuda.synchronize()
+        total_runtime += time.perf_counter() - t_start
+        num_samples += 1
         if callback_fn is not None:
             pred = {**callback_fn(pred, data), **pred}
         if keys != "*":
@@ -77,5 +88,7 @@ def export_predictions(
             continue
 
         del pred
+    hfile.attrs["total_runtime_s"] = total_runtime
+    hfile.attrs["num_samples"] = num_samples
     hfile.close()
     return output_file
