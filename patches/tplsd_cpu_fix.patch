@@ -1,0 +1,14 @@
+diff --git a/utils/reconstruct.py b/utils/reconstruct.py
+index c85e14a..dfadb13 100755
+--- a/utils/reconstruct.py
++++ b/utils/reconstruct.py
+@@ -32,7 +32,8 @@ def TPS_line(output, thresh=0.2, lmbd=0, H=320, W=320):
+     end_point = end_point_test.detach().cpu().numpy()
+ 
+     line = np.stack([start_point, end_point], axis=1)
+-    torch.cuda.synchronize()
++    if torch.cuda.is_available():
++        torch.cuda.synchronize()
+     endtime = time.time()
+     return line.reshape((-1, 4)), start_point, end_point, pos_test.cpu().numpy(), endtime
+ 
