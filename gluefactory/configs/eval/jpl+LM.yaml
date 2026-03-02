@@ -14,6 +14,7 @@ model:
     checkpoint: assets/jpl_best.tar
   matcher:
     name: matchers.line_matcher
+    line_dist: orth
 benchmarks:
   megadepth1500:
     data:
