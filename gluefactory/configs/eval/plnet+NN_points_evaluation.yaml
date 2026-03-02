@@ -22,6 +22,9 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         detector:
@@ -35,6 +38,9 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         detector:
@@ -48,6 +54,9 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         detector:
@@ -61,6 +70,9 @@ benchmarks:
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         detector:
@@ -70,12 +82,15 @@ benchmarks:
     data:
       preprocessing:
         side: long
-        resize: 800
+        resize: 1600
     eval:
       estimator: poselib
       ransac_th: -1
+      options:
+        min_iterations: 2000
+        max_iterations: 2000000
     model:
       extractor:
         detector:
-          max_num_junctions: 1024
-          num_keypoints: 1024
+          max_num_junctions: 2048
+          num_keypoints: 2048
