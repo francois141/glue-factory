@@ -86,46 +86,28 @@ legend_elements = [
     Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=8, label='SAK (Ours, Points only)'),
     Line2D([0], [0], marker='^', color='w', markerfacecolor='purple', markersize=8, label='Wireframe'),
     Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=8, label='DISK'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='blue', markersize=8, label=f'SuperPoint ({HSPACE}) + DeepLSD'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=8, label=f'SuperPoint'),
+    Line2D([0], [0], marker='^', color='w', markerfacecolor='blue', markersize=8, label=f'SuperPoint + DeepLSD'),
     Line2D([0], [0], marker='^', color='w', markerfacecolor='darkblue', markersize=8, label='SuperPoint + ScaleLSD'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='green', markersize=8, label=f'ALIKED ({HSPACE}) + DeepLSD'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=8, label=f'ALIKED'),
+    Line2D([0], [0], marker='^', color='w', markerfacecolor='green', markersize=8, label=f'ALIKED + DeepLSD'),
     Line2D([0], [0], marker='^', color='w', markerfacecolor='brown', markersize=8, label='ALIKED + ScaleLSD'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='orange', markersize=8, label=f'DaD + DeDoDev2 ({HSPACE}) + ScaleLSD'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=8, label=f'DaD + DeDoDev2'),
+    Line2D([0], [0], marker='^', color='w', markerfacecolor='orange', markersize=8, label=f'DaD + DeDoDev2 + ScaleLSD'),
 ]
 
 leg = fig.legend(
     handles=legend_elements,
     loc="lower center",
-    ncol=3,
-    fontsize=10,
+    ncol=4,
+    fontsize=11,
     frameon=True
 )
 
 # Render to place colored dots in legend
 fig.canvas.draw()
-renderer = fig.canvas.get_renderer()
-inv = fig.transFigure.inverted()
 
-dot_entries = {
-    4: 'blue',
-    6: 'green',
-    8: 'orange',
-}
 
-for idx, color in dot_entries.items():
-    text = leg.get_texts()[idx]
-    bb = text.get_window_extent(renderer)
-
-    # position dot exactly inside the phantom ()
-    dot_x = bb.x0 + 0.42 * bb.width
-    dot_y = 0.5 * (bb.y0 + bb.y1)
-
-    fx, fy = inv.transform((dot_x, dot_y))
-    fig.patches.append(
-        Circle((fx, fy), 0.009,
-               transform=fig.transFigure,
-               fc=color, ec=color, zorder=10)
-    )
-
-plt.tight_layout(rect=[0, 0.12, 1, 1])
+plt.tight_layout(rect=[0, 0.15, 1, 1])
+plt.savefig("teaser_v3.pdf", format="pdf", bbox_inches="tight")
 plt.show()
