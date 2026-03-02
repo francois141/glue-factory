@@ -1,0 +1,22 @@
+diff --git a/dad/utils.py b/dad/utils.py
+index 9aa78c0..14f43f2 100644
+--- a/dad/utils.py
++++ b/dad/utils.py
+@@ -123,7 +123,7 @@ def extract_patches_from_coords(x: torch.Tensor, coords: torch.Tensor, patch_siz
+ def sample_keypoints(
+     keypoint_probs: torch.Tensor,
+     num_samples=8192,
+-    device=get_best_device(),
++    device=None,
+     use_nms=True,
+     nms_size=1,
+     sample_topk=True,
+@@ -136,6 +136,8 @@ def sample_keypoints(
+     scoremap=None,  # required for subpixel
+     subpixel_temp=0.5,
+ ):
++    if device is None:
++        device = keypoint_probs.device
+     B, H, W = keypoint_probs.shape
+     if increase_coverage:
+         weights = (
