@@ -1,0 +1,30 @@
+Subject: [PATCH] fix device placement logic so model can run on cpu if gpu available
+---
+Index: wireframe_distillation/wireframe_net.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/wireframe_distillation/wireframe_net.py b/wireframe_distillation/wireframe_net.py
+--- a/wireframe_distillation/wireframe_net.py	(revision fa0f98fe4cd29a62d572b52a5b708fbf57cff468)
++++ b/wireframe_distillation/wireframe_net.py	(revision 7a95413c74b2ce70dba109d1555a97145331c6ec)
+@@ -481,7 +481,7 @@
+             loi_features[0], lines_adjusted[:, 2:] - 0.5
+         ).t()
+
+-        device = "cuda" if torch.cuda.is_available() else "cpu"
++        device = loi_features_thin[0].device
+         tspan = torch.linspace(0, 1, 32).view(1, 1, 32).to(device)
+
+         f1 = self.compute_loi_features(
+@@ -580,9 +580,8 @@
+
+     def _forward(self, input_dict, threshold=0.02):
+
+-        device = "cuda" if torch.cuda.is_available() else "cpu"
+-
+         input_batch = input_dict["image"]
++        device = input_batch.device
+         input_original_size = [input_batch.shape[-2], input_batch.shape[-1]]
+
+         input_batch = self.transform_batch(input_batch)
