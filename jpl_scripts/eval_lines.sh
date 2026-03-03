@@ -6,6 +6,28 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=6000
 
+# CONFIG #
+OVERWRITE_EVAL=true
+OVERWRITE_EXTRACT=true
+TIMING_ONLY=false
+# END #
+
+overwrite_flag=""
+overwrite_eval_flag=""
+timing_only_flag=""
+if [ "$OVERWRITE_EVAL" == "true" ]; then
+  echo "Overwrite eval results - recompute eval based on existing features!"
+  overwrite_eval_flag="--overwrite_eval"
+fi
+if [ "$OVERWRITE_EXTRACT" == "true" ]; then
+  echo "Overwrite features and eval."
+  overwrite_flag="--overwrite"
+fi
+if [ "$TIMING_ONLY" == "true" ]; then
+  echo "Timing only mode - skip evaluation, only measure inference time."
+  timing_only_flag="--timing_only"
+fi
+
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
 #source $DIR/common.sh
 
@@ -47,6 +69,6 @@ for config_entry in "${CONFIGS[@]}"; do
     IFS='|' read -r display_name config_path output_suffix <<< "$config_entry"
     echo "Evaluation of $display_name"
     for benchmark in "${BENCHMARKS[@]}"; do
-        python -m "gluefactory.eval.${benchmark}" --conf "$config_path" --overwrite > "${OUTPUT_DIR}/${benchmark}_${output_suffix}.txt"
+        python -m "gluefactory.eval.${benchmark}" --conf "$config_path" $overwrite_eval_flag $overwrite_flag $timing_only_flag > "${OUTPUT_DIR}/${benchmark}_${output_suffix}.txt"
     done
 done

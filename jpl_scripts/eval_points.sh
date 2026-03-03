@@ -6,6 +6,27 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=6000
 
+# CONFIG #
+OVERWRITE_EVAL=true
+OVERWRITE_EXTRACT=true
+TIMING_ONLY=false
+# END #
+
+overwrite_flag=""
+overwrite_eval_flag=""
+timing_only_flag=""
+if [ "$OVERWRITE_EVAL" == "true" ]; then
+  echo "Overwrite eval results - recompute eval based on existing features!"
+  overwrite_eval_flag="--overwrite_eval"
+fi
+if [ "$OVERWRITE_EXTRACT" == "true" ]; then
+  echo "Overwrite features and eval."
+  overwrite_flag="--overwrite"
+fi
+if [ "$TIMING_ONLY" == "true" ]; then
+  echo "Timing only mode - skip evaluation, only measure inference time."
+  timing_only_flag="--timing_only"
+fi
 DIR=$SLURM_SUBMIT_DIR/jpl_scripts
 #source $DIR/common.sh
 
@@ -47,17 +68,17 @@ run_eval() {
       "megadepth")
         python -m gluefactory.eval.megadepth1500 \
           --conf "$conf_path" \
-          --overwrite > "${OUTPUT_DIR}/${tag}_megadepth.txt"
+          $overwrite_eval_flag $overwrite_flag $timing_only_flag > "${OUTPUT_DIR}/${tag}_megadepth.txt"
         ;;
       "scannet")
         python -m gluefactory.eval.scannet1500 \
           --conf "$conf_path" \
-          --overwrite > "${OUTPUT_DIR}/${tag}_scannet1500.txt"
+          $overwrite_eval_flag $overwrite_flag $timing_only_flag > "${OUTPUT_DIR}/${tag}_scannet1500.txt"
         ;;
       "hpatches")
         python -m gluefactory.eval.hpatches \
           --conf "$conf_path" \
-          --overwrite > "${OUTPUT_DIR}/${tag}_hpatches.txt"
+          $overwrite_eval_flag $overwrite_flag $timing_only_flag > "${OUTPUT_DIR}/${tag}_hpatches.txt"
         ;;
       *)
         echo "Warning: Unknown experiment '$experiment'"
