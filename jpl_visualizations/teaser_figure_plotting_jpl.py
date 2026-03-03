@@ -43,8 +43,10 @@ def plot_panel(ax, title):
         else:
             marker, size = '^', 120
 
+        print(row["Latency CPU"], row["Reconstruction Quality"])
+
         ax.scatter(
-            row["Latency"],               # SAME values for CPU/GPU for now
+            row["Latency CPU"],               # SAME values for CPU/GPU for now
             row["Reconstruction Quality"],
             color=color,
             marker=marker,
@@ -53,7 +55,7 @@ def plot_panel(ax, title):
         )
 
         if 'SAK' in name:
-            sak_coords[name] = (row["Latency"], row["Reconstruction Quality"])
+            sak_coords[name] = (row["Latency CPU"], row["Reconstruction Quality"])
 
     # Connect SAK variants
     if 'SAK (Ours)' in sak_coords and 'SAK (Ours, Points only)' in sak_coords:
