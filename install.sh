@@ -1,3 +1,4 @@
+#!/bin/bash
 
 echo "Cloning submodules"
 git submodule update --init --recursive
@@ -17,12 +18,13 @@ packages=(
     "other/DeepLSD:pip install ."
     "other/faster_pytlsd:pip install ."
     "other/homography_est:pip install ."
-    "other/dad:pip install ."
+    "other/dad:git apply --check ../../patches/dad_cpu_fix.patch 2>/dev/null && git apply ../../patches/dad_cpu_fix.patch || true; pip install ."
     "other/points_lsd:pip install ."
     "other/DeDoDe:pip install ."
-    "other/wireframe-detector:pip install ."
-    "other/PLNet:pip install ."
-    "other/dcvn2:pip install --no-build-isolation ."
+    "other/wireframe-detector:git apply --check ../../patches/wireframe_cpu_fix.patch 2>/dev/null && git apply ../../patches/wireframe_cpu_fix.patch || true; pip install ."
+    "other/PLNet:git apply --check ../../patches/plnet_cpu_fix.patch 2>/dev/null && git apply ../../patches/plnet_cpu_fix.patch || true; git apply --check ../../patches/plnet_add_support_to_set_max_num_kp_and_return_descriptors.patch 2>/dev/null && git apply ../../patches/plnet_add_support_to_set_max_num_kp_and_return_descriptors.patch || true; pip install ."
+    "other/dcnv2:git apply --check ../../dcnv2-pytorch-compat.patch 2>/dev/null && git apply ../../dcnv2-pytorch-compat.patch || true; pip install --no-build-isolation ."
+    "other/ELSED:pip install ."
 )
 
 declare -A install_status
@@ -47,12 +49,14 @@ echo "=============================="
 echo "  Installation Summary"
 echo "=============================="
 all_ok=true
-for dir in "${packages[@]}"; do
+for entry in "${packages[@]}"; do
+    dir="${entry%%:*}"
+    pkg_name=$(basename "$dir")
     status="${install_status[$dir]}"
     if [ "$status" = "SUCCESS" ]; then
         echo "  [OK]   $dir"
     else
-        echo "  [FAIL] $dir  (see $LOG_DIR/$(basename "$dir").log)"
+        echo "  [FAIL] $dir  (see $LOG_DIR/${pkg_name}.log)"
         all_ok=false
     fi
 done
@@ -74,8 +78,8 @@ if ! command -v nvcc &> /dev/null; then
     sudo apt-get -y install cuda-toolkit-12-9
 
     # Add to bashrc
-    echo -e '\nexport PATH=/usr/local/cuda-12.6/bin${PATH:+:${PATH}}' >> ~/.bashrc && \
-    echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc
+    echo -e '\nexport PATH=/usr/local/cuda-12.9/bin${PATH:+:${PATH}}' >> ~/.bashrc && \
+    echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc
 else
     echo "CUDA toolkit already available ($(nvcc --version | grep release)). Skipping install."
 fi
