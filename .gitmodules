@@ -28,3 +28,6 @@
 [submodule "other/dcnv2"]
 	path = other/dcnv2
 	url = https://github.com/lucasjinreal/DCNv2_latest
+[submodule "other/ELSED"]
+	path = other/ELSED
+	url = https://github.com/iago-suarez/ELSED.git
