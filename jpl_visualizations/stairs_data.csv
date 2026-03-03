@@ -1,13 +1,15 @@
-Name,Latency,Reconstruction Quality,Category
-SAK (Ours),70,54.6,p+l
-SuperPoint + DeepLSD,293,49.6,p+l
-ALIKED + DeepLSD,286,49.6,p+l
-Wireframe,266,53.8 ,p+l
-SuperPoint,15.2,36.6,p
-ALIKED,17.6,35.0,p
-DISK,93.9,28.5,p
-"SAK (Ours, Points only)",17.6,49.1,p
-DaD + DeDoDev2,75.5,14.6,p
-SuperPoint + ScaleLSD,98,49.5,p+l
-ALIKED + ScaleLSD,92,49.4,p+l
-DaD + DeDoDev2 + ScaleLSD,147,49.8,p+l
+Name,Latency CPU,Latency GPU,Reconstruction Quality,Category
+ALIKED + DeepLSD,2239,293,49.6,p+l
+SuperPoint + DeepLSD,2259,301,49.6,p+l
+DaD + DeDoDev2 + ScaleLSD,20k,154,49.8,p+l
+ALIKED + MLSD,525,61,X,p+l
+ALIKED + TPLSD,1582,56,X,p+l
+Wireframe,2493,182,53.8,p+l
+PLNet, 6233, 136, X, p+l
+SAK (Ours),976,72,54.6,p+l
+DaD + DeDoDev2,X,X,14.6,p
+SuperPoint,X,X,36.6,p
+ALIKED,X,X,35.0,p
+DISK,X,X,28.5,p
+SAK (Ours, Points only),X,X,49.1,p
+
