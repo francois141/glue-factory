@@ -106,5 +106,7 @@ def get_eval_parser():
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--overwrite_eval", action="store_true")
     parser.add_argument("--plot", action="store_true")
+    parser.add_argument("--timing_only", action="store_true",
+                        help="Only run predictions and report average timing, skip evaluation.")
     parser.add_argument("dotlist", nargs="*")
     return parser

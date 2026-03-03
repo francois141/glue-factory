@@ -78,7 +78,8 @@ class EvalPipeline:
         """Run the eval on cached predictions"""
         raise NotImplementedError
 
-    def run(self, experiment_dir, model=None, overwrite=False, overwrite_eval=False):
+    def run(self, experiment_dir, model=None, overwrite=False, overwrite_eval=False,
+            timing_only=False):
         """Run export+eval loop"""
         self.save_conf(
             experiment_dir, overwrite=overwrite, overwrite_eval=overwrite_eval
@@ -89,6 +90,9 @@ class EvalPipeline:
             experiment_dir, model=model, overwrite=overwrite
         )
         logger.info(f"Loop 1 finished. Predictions saved to {pred_file}.")
+
+        if timing_only:
+            return {}, {}, {}
 
         f = {}
         if not exists_eval(experiment_dir) or overwrite_eval or overwrite:

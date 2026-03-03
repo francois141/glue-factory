@@ -192,6 +192,7 @@ if __name__ == "__main__":
         experiment_dir,
         overwrite=args.overwrite,
         overwrite_eval=args.overwrite_eval,
+        timing_only=args.timing_only,
     )
 
     pred_file = experiment_dir / "predictions.h5"
