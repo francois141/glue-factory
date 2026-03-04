@@ -57,11 +57,7 @@ def plot_panel(ax, title, *, device):
         category = row['Category']
         color = color_map.get(name, 'gray')
 
-        if name == "ALIKED + MLSD":
-            marker, size = 's', 100
-        elif name == "ALIKED + TPLSD":
-            marker, size = 'p', 120
-        elif 'SAK' in name and category == 'p+l':
+        if 'SAK' in name and category == 'p+l':
             marker, size = '*', 400
         elif category == 'p':
             marker, size = 'o', 100
@@ -110,28 +106,6 @@ axes[0].set_ylabel(r"$\textbf{Accuracy (\%) @ 5cm/5}^\circ \boldsymbol{\uparrow}
 HSPACE = r'$\hspace{0.5cm}$'
 
 legend_elements = [
-    # ===== Ours =====
-    Line2D([0], [0], marker='*', linestyle='',
-           markerfacecolor=color_map["SAK (Ours)"],
-           markeredgecolor='w', markersize=15,
-           label="SAK (Ours)"),
-
-    Line2D([0], [0], marker='o', linestyle='',
-           markerfacecolor=color_map["SAK (Ours Points only)"],
-           markeredgecolor='w', markersize=8,
-           label="SAK (Ours Points only)"),
-
-    # ===== Wireframe / DISK =====
-    Line2D([0], [0], marker='^', linestyle='',
-           markerfacecolor=color_map["Wireframe"],
-           markeredgecolor='w', markersize=8,
-           label="Wireframe"),
-
-    Line2D([0], [0], marker='o', linestyle='',
-           markerfacecolor=color_map["DISK"],
-           markeredgecolor='w', markersize=8,
-           label="DISK"),
-
     # ===== SuperPoint family =====
     Line2D([0], [0], marker='o', linestyle='',
            markerfacecolor=color_map["SuperPoint"],
@@ -143,26 +117,48 @@ legend_elements = [
            markeredgecolor='w', markersize=8,
            label="SuperPoint + DeepLSD"),
 
+
+
+
     # ===== ALIKED family =====
     Line2D([0], [0], marker='o', linestyle='',
            markerfacecolor=color_map["ALIKED"],
            markeredgecolor='w', markersize=8,
            label="ALIKED"),
 
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["ALIKED + TPLSD"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED + TPLSD"),
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["ALIKED + MLSD"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED + MLSD"),
+
     Line2D([0], [0], marker='^', linestyle='',
            markerfacecolor=color_map["ALIKED + DeepLSD"],
            markeredgecolor='w', markersize=8,
            label="ALIKED + DeepLSD"),
 
-    Line2D([0], [0], marker='s', linestyle='',
-           markerfacecolor=color_map["ALIKED + MLSD"],
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["DISK"],
            markeredgecolor='w', markersize=8,
-           label="ALIKED + MLSD"),
+           label="DISK"),
 
-    Line2D([0], [0], marker='p', linestyle='',
-           markerfacecolor=color_map["ALIKED + TPLSD"],
+    # ===== DaD family =====
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["DaD + DeDoDev2 + ScaleLSD"],
            markeredgecolor='w', markersize=8,
-           label="ALIKED + TPLSD"),
+           label="DaD + DeDoDev2 + ScaleLSD"),
+
+    # ===== Wireframe  =====
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["Wireframe"],
+           markeredgecolor='w', markersize=8,
+           label="Wireframe"),
 
     # ===== PLNet =====
     Line2D([0], [0], marker='^', linestyle='',
@@ -170,16 +166,18 @@ legend_elements = [
            markeredgecolor='w', markersize=8,
            label="PLNet"),
 
-    # ===== DaD family =====
-    #Line2D([0], [0], marker='o', linestyle='',
-    #       markerfacecolor=color_map["DaD + DeDoDev2"],
-    #       markeredgecolor='w', markersize=8,
-    #       label="DaD + DeDoDev2"),
 
-    Line2D([0], [0], marker='^', linestyle='',
-           markerfacecolor=color_map["DaD + DeDoDev2 + ScaleLSD"],
+
+    # ===== Ours =====
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["SAK (Ours Points only)"],
            markeredgecolor='w', markersize=8,
-           label="DaD + DeDoDev2 + ScaleLSD"),
+           label="SAK (Ours Points only)"),
+
+    Line2D([0], [0], marker='*', linestyle='',
+           markerfacecolor=color_map["SAK (Ours)"],
+           markeredgecolor='w', markersize=15,
+           label="SAK (Ours)"),
 ]
 
 leg = fig.legend(
