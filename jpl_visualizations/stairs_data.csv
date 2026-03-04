@@ -10,6 +10,6 @@ SuperPoint,469,16,36.6,p
 ALIKED,461,14,35.0,p
 DISK,601,57,28.5,p
 SAK (Ours Points only),585,17,49.1,p
-DaD + DeDoDev2 + ScaleLSD,0,154,49.8,p+l
-DaD + DeDoDev2,0,78,14.6,p
+DaD + DeDoDev2 + ScaleLSD,20000,154,49.8,p+l
+
 

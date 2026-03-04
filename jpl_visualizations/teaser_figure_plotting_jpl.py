@@ -7,6 +7,8 @@ plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath} \usepackage{amssymb
 
 data = pd.read_csv("stairs_data.csv")
 
+# DaD + DeDoDev2,0,78,14.6,p
+
 color_map = {
     # ===== Ours =====
     "SAK (Ours)": "#d62728",  # red
@@ -15,8 +17,8 @@ color_map = {
     # ===== ALIKED family =====
     "ALIKED": "#2ca02c",  # green
     "ALIKED + DeepLSD": "#2ca02c",
-    "ALIKED + MLSD": "#2ca02c",
-    "ALIKED + TPLSD": "#2ca02c",
+    "ALIKED + MLSD":  "#17becf",   # cyan / turquoise
+    "ALIKED + TPLSD": "#bcbd22",   # mustard / yellow-olive
 
     # ===== SuperPoint family =====
     "SuperPoint": "#1f77b4",  # blue
@@ -55,7 +57,11 @@ def plot_panel(ax, title, *, device):
         category = row['Category']
         color = color_map.get(name, 'gray')
 
-        if 'SAK' in name and category == 'p+l':
+        if name == "ALIKED + MLSD":
+            marker, size = 's', 100
+        elif name == "ALIKED + TPLSD":
+            marker, size = 'p', 120
+        elif 'SAK' in name and category == 'p+l':
             marker, size = '*', 400
         elif category == 'p':
             marker, size = 'o', 100
@@ -74,12 +80,12 @@ def plot_panel(ax, title, *, device):
         )
 
         if 'SAK' in name:
-            sak_coords[name] = (row["Latency CPU"], row["Reconstruction Quality"])
+            sak_coords[name] = (row[f"Latency {device}"], row["Reconstruction Quality"])
 
     # Connect SAK variants
-    if 'SAK (Ours)' in sak_coords and 'SAK (Ours, Points only)' in sak_coords:
+    if 'SAK (Ours)' in sak_coords and 'SAK (Ours Points only)' in sak_coords:
         a = sak_coords['SAK (Ours)']
-        b = sak_coords['SAK (Ours, Points only)']
+        b = sak_coords['SAK (Ours Points only)']
         ax.plot([a[0], b[0]], [a[1], b[1]],
                 'r--', linewidth=1.5, alpha=0.7)
 
@@ -148,10 +154,15 @@ legend_elements = [
            markeredgecolor='w', markersize=8,
            label="ALIKED + DeepLSD"),
 
-    Line2D([0], [0], marker='^', linestyle='',
+    Line2D([0], [0], marker='s', linestyle='',
            markerfacecolor=color_map["ALIKED + MLSD"],
            markeredgecolor='w', markersize=8,
            label="ALIKED + MLSD"),
+
+    Line2D([0], [0], marker='p', linestyle='',
+           markerfacecolor=color_map["ALIKED + TPLSD"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED + TPLSD"),
 
     # ===== PLNet =====
     Line2D([0], [0], marker='^', linestyle='',
@@ -160,10 +171,10 @@ legend_elements = [
            label="PLNet"),
 
     # ===== DaD family =====
-    Line2D([0], [0], marker='o', linestyle='',
-           markerfacecolor=color_map["DaD + DeDoDev2"],
-           markeredgecolor='w', markersize=8,
-           label="DaD + DeDoDev2"),
+    #Line2D([0], [0], marker='o', linestyle='',
+    #       markerfacecolor=color_map["DaD + DeDoDev2"],
+    #       markeredgecolor='w', markersize=8,
+    #       label="DaD + DeDoDev2"),
 
     Line2D([0], [0], marker='^', linestyle='',
            markerfacecolor=color_map["DaD + DeDoDev2 + ScaleLSD"],
