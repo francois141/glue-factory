@@ -9,18 +9,32 @@ plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath} \usepackage{amssymb
 data = pd.read_csv("stairs_data.csv")
 
 color_map = {
-    'SAK (Ours)': 'red',
-    'SAK (Ours, Points only)': 'red',
-    'SuperPoint + DeepLSD': 'blue',
-    'SuperPoint': 'blue',
-    'ALIKED + DeepLSD': 'green',
-    'ALIKED': 'green',
-    'Wireframe': 'purple',
-    'DISK': 'purple',
-    'DaD + DeDoDev2 + ScaleLSD': 'orange',
-    'DaD + DeDoDev2': 'orange',
-    'ALIKED + ScaleLSD': 'brown',
-    'SuperPoint + ScaleLSD': 'darkblue'
+    # ===== Ours =====
+    "SAK (Ours)": "#d62728",                 # red
+    "SAK (Ours Points only)": "#d62728",
+
+    # ===== ALIKED family =====
+    "ALIKED": "#2ca02c",                     # green
+    "ALIKED + DeepLSD": "#2ca02c",
+    "ALIKED + MLSD": "#2ca02c",
+    "ALIKED + TPLSD": "#2ca02c",
+
+    # ===== SuperPoint family =====
+    "SuperPoint": "#1f77b4",                 # blue
+    "SuperPoint + DeepLSD": "#1f77b4",
+
+    # ===== Wireframe =====
+    "Wireframe": "#9467bd",                  # purple
+
+    # ===== PLNet =====
+    "PLNet": "#8c564b",                      # brown
+
+    # ===== DISK =====
+    "DISK": "#e377c2",                       # pink
+
+    # ===== DaD family =====
+    "DaD + DeDoDev2": "#ff7f0e",              # orange
+    "DaD + DeDoDev2 + ScaleLSD": "#ff7f0e",
 }
 
 # ---------------------------
@@ -46,8 +60,8 @@ def plot_panel(ax, title):
         print(row["Latency CPU"], row["Reconstruction Quality"])
 
         ax.scatter(
-            row["Latency CPU"],               # SAME values for CPU/GPU for now
-            row["Reconstruction Quality"],
+            float(row["Latency CPU"]),               # SAME values for CPU/GPU for now
+            float(row["Reconstruction Quality"]),
             color=color,
             marker=marker,
             s=size,
@@ -65,8 +79,8 @@ def plot_panel(ax, title):
                 'r--', linewidth=1.5, alpha=0.7)
 
     ax.set_title(title, fontsize=13)
-    ax.set_xlim(0, 350)
-    ax.set_ylim(10, 60)
+    #ax.set_xlim(0, 350)
+    #ax.set_ylim(10, 60)
     ax.grid(True, linestyle='--', alpha=0.6)
 
 
@@ -83,19 +97,74 @@ axes[0].set_ylabel(r"$\textbf{Accuracy (\%) @ 5cm/5}^\circ \boldsymbol{\uparrow}
 # Legend (shared)
 # ---------------------------
 HSPACE = r'$\hspace{0.5cm}$'
+
+
 legend_elements = [
-    Line2D([0], [0], marker='*', color='w', markerfacecolor='red', markersize=15, label='SAK (Ours)'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=8, label='SAK (Ours, Points only)'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='purple', markersize=8, label='Wireframe'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=8, label='DISK'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=8, label=f'SuperPoint'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='blue', markersize=8, label=f'SuperPoint + DeepLSD'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='darkblue', markersize=8, label='SuperPoint + ScaleLSD'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=8, label=f'ALIKED'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='green', markersize=8, label=f'ALIKED + DeepLSD'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='brown', markersize=8, label='ALIKED + ScaleLSD'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=8, label=f'DaD + DeDoDev2'),
-    Line2D([0], [0], marker='^', color='w', markerfacecolor='orange', markersize=8, label=f'DaD + DeDoDev2 + ScaleLSD'),
+    # ===== Ours =====
+    Line2D([0], [0], marker='*', linestyle='',
+           markerfacecolor=color_map["SAK (Ours)"],
+           markeredgecolor='w', markersize=15,
+           label="SAK (Ours)"),
+
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["SAK (Ours Points only)"],
+           markeredgecolor='w', markersize=8,
+           label="SAK (Ours Points only)"),
+
+    # ===== Wireframe / DISK =====
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["Wireframe"],
+           markeredgecolor='w', markersize=8,
+           label="Wireframe"),
+
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["DISK"],
+           markeredgecolor='w', markersize=8,
+           label="DISK"),
+
+    # ===== SuperPoint family =====
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["SuperPoint"],
+           markeredgecolor='w', markersize=8,
+           label="SuperPoint"),
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["SuperPoint + DeepLSD"],
+           markeredgecolor='w', markersize=8,
+           label="SuperPoint + DeepLSD"),
+
+    # ===== ALIKED family =====
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["ALIKED"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED"),
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["ALIKED + DeepLSD"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED + DeepLSD"),
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["ALIKED + MLSD"],
+           markeredgecolor='w', markersize=8,
+           label="ALIKED + MLSD"),
+
+    # ===== PLNet =====
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["PLNet"],
+           markeredgecolor='w', markersize=8,
+           label="PLNet"),
+
+    # ===== DaD family =====
+    Line2D([0], [0], marker='o', linestyle='',
+           markerfacecolor=color_map["DaD + DeDoDev2"],
+           markeredgecolor='w', markersize=8,
+           label="DaD + DeDoDev2"),
+
+    Line2D([0], [0], marker='^', linestyle='',
+           markerfacecolor=color_map["DaD + DeDoDev2 + ScaleLSD"],
+           markeredgecolor='w', markersize=8,
+           label="DaD + DeDoDev2 + ScaleLSD"),
 ]
 
 leg = fig.legend(
