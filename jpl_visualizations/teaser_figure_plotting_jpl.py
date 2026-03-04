@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.lines import Line2D
-from matplotlib.patches import Circle
 
 plt.rcParams["text.usetex"] = True
 plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath} \usepackage{amssymb}"
@@ -10,30 +9,30 @@ data = pd.read_csv("stairs_data.csv")
 
 color_map = {
     # ===== Ours =====
-    "SAK (Ours)": "#d62728",                 # red
+    "SAK (Ours)": "#d62728",  # red
     "SAK (Ours Points only)": "#d62728",
 
     # ===== ALIKED family =====
-    "ALIKED": "#2ca02c",                     # green
+    "ALIKED": "#2ca02c",  # green
     "ALIKED + DeepLSD": "#2ca02c",
     "ALIKED + MLSD": "#2ca02c",
     "ALIKED + TPLSD": "#2ca02c",
 
     # ===== SuperPoint family =====
-    "SuperPoint": "#1f77b4",                 # blue
+    "SuperPoint": "#1f77b4",  # blue
     "SuperPoint + DeepLSD": "#1f77b4",
 
     # ===== Wireframe =====
-    "Wireframe": "#9467bd",                  # purple
+    "Wireframe": "#9467bd",  # purple
 
     # ===== PLNet =====
-    "PLNet": "#8c564b",                      # brown
+    "PLNet": "#8c564b",  # brown
 
     # ===== DISK =====
-    "DISK": "#e377c2",                       # pink
+    "DISK": "#e377c2",  # pink
 
     # ===== DaD family =====
-    "DaD + DeDoDev2": "#ff7f0e",              # orange
+    "DaD + DeDoDev2": "#ff7f0e",  # orange
     "DaD + DeDoDev2 + ScaleLSD": "#ff7f0e",
 }
 
@@ -42,11 +41,17 @@ color_map = {
 # ---------------------------
 fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
 
-def plot_panel(ax, title):
+
+def plot_panel(ax, title, *, device):
     sak_coords = {}
 
     for _, row in data.iterrows():
+
+        if "DeDoDev2" in row['Name'] and device == "CPU":
+            continue
+
         name = row['Name']
+
         category = row['Category']
         color = color_map.get(name, 'gray')
 
@@ -57,10 +62,10 @@ def plot_panel(ax, title):
         else:
             marker, size = '^', 120
 
-        print(row["Latency CPU"], row["Reconstruction Quality"])
+        print(row[f"Latency {device}"], row["Reconstruction Quality"])
 
         ax.scatter(
-            float(row["Latency CPU"]),               # SAME values for CPU/GPU for now
+            float(row[f"Latency {device}"]),  # SAME values for CPU/GPU for now
             float(row["Reconstruction Quality"]),
             color=color,
             marker=marker,
@@ -79,14 +84,14 @@ def plot_panel(ax, title):
                 'r--', linewidth=1.5, alpha=0.7)
 
     ax.set_title(title, fontsize=13)
-    #ax.set_xlim(0, 350)
-    #ax.set_ylim(10, 60)
+    # ax.set_xlim(0, 350)
+    # ax.set_ylim(10, 60)
     ax.grid(True, linestyle='--', alpha=0.6)
 
 
 # Plot CPU and GPU panels
-plot_panel(axes[0], r"\textbf{CPU}")
-plot_panel(axes[1], r"\textbf{GPU}")
+plot_panel(axes[0], r"\textbf{CPU}", device="CPU")
+plot_panel(axes[1], r"\textbf{GPU}", device="GPU")
 
 # Axis labels
 axes[0].set_xlabel(r"$\textbf{Latency (ms)}\boldsymbol{\downarrow}$", fontsize=13)
@@ -97,7 +102,6 @@ axes[0].set_ylabel(r"$\textbf{Accuracy (\%) @ 5cm/5}^\circ \boldsymbol{\uparrow}
 # Legend (shared)
 # ---------------------------
 HSPACE = r'$\hspace{0.5cm}$'
-
 
 legend_elements = [
     # ===== Ours =====
@@ -177,7 +181,6 @@ leg = fig.legend(
 
 # Render to place colored dots in legend
 fig.canvas.draw()
-
 
 plt.tight_layout(rect=[0, 0.15, 1, 1])
 plt.savefig("teaser_v3.pdf", format="pdf", bbox_inches="tight")
