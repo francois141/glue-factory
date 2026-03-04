@@ -8,9 +8,6 @@ model:
     max_num_keypoints: 2048
     line_detection:
         do: True
-        conf:
-          lsd_type: old
-          sigma: 0.9
     checkpoint: assets/jpl_best.tar
   matcher:
     name: matchers.line_matcher
