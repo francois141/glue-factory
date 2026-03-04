@@ -967,11 +967,12 @@ class JointPointLineDetectorDescriptor(BaseModel):
         return torch.exp(-df_norm) * self.conf.line_neighborhood
 
     def get_numer_of_parameters(self):
+        """Count number of parameters in the model - dont count df branch if not initialized ex. if only use as point model"""
         def count_parameters(model: nn.Module):
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         return (
-            count_parameters(self.distance_field_branch)
+            count_parameters(self.distance_field_branch) if getattr(self, "distance_field_branch", None) else 0
             + count_parameters(self.descriptor_branch)
             + count_parameters(self.keypoint_and_junction_branch)
             + count_parameters(self.encoder_backbone)
