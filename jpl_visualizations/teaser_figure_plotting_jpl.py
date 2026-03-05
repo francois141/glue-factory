@@ -172,12 +172,12 @@ legend_elements = [
     Line2D([0], [0], marker='o', linestyle='',
            markerfacecolor=color_map["SAK (Ours Points only)"],
            markeredgecolor='w', markersize=8,
-           label="SAK (Ours Points only)"),
+           label="UPAL (Ours Points only)"),
 
     Line2D([0], [0], marker='*', linestyle='',
            markerfacecolor=color_map["SAK (Ours)"],
            markeredgecolor='w', markersize=15,
-           label="SAK (Ours)"),
+           label="UPAL (Ours)"),
 ]
 
 leg = fig.legend(
