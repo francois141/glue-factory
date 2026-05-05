@@ -1,0 +1,50 @@
+model:
+    name: two_view_pipeline
+    extractor:
+        name: extractors.liftfeat
+        max_num_keypoints: 2048
+        detection_threshold: 0.05
+        force_num_keypoints: False
+        trainable: False
+    matcher:
+        name: matchers.nearest_neighbor_matcher
+benchmarks:
+    megadepth1500:
+        data:
+            preprocessing:
+                side: long
+                resize: 1600
+        eval:
+            estimator: poselib
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
+    scannet1500:
+        data:
+            preprocessing:
+                side: long
+                resize: 1600
+        eval:
+            estimator: poselib
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
+        model:
+            extractor:
+                max_num_keypoints: 2048
+    hpatches:
+        data:
+            preprocessing:
+                side: long
+                resize: 800
+        eval:
+            estimator: poselib
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
+        model:
+            extractor:
+                max_num_keypoints: 1024
