@@ -345,7 +345,11 @@ class XFeat(BaseModel):
         kpt_logit_map = net_output["keypoint_logit_map"]
         rel_map = net_output["reliability_map"]
 
-        B, _, H, W = x.shape
+        B, _, _H_orig, _W_orig = x.shape
+        # Use preprocessed dimensions for coordinate normalization (mkpts are in
+        # preprocessed space). Matches the original XFeat implementation.
+        H = int(round(_H_orig / rh))
+        W = int(round(_W_orig / rw))
 
         desc_map = F.normalize(desc_map, dim=1)
 

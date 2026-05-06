@@ -13,9 +13,12 @@ import torch.nn as nn
 from DeDoDe import dedode_descriptor_B, dedode_descriptor_G, dedode_detector_L
 from DeDoDe.matchers.dual_softmax_matcher import DualSoftMaxMatcher
 from PIL import Image
+from torchvision.transforms import Normalize
 
 from ..base_model import BaseModel
 from ..utils.misc import pad_and_stack
+
+_IMAGENET_NORM = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 
 class DeDoDeDetector(BaseModel):
@@ -40,7 +43,7 @@ class DeDoDeDetector(BaseModel):
 
     def _forward(self, data):
         with torch.no_grad():
-            input_data = {"image": data["image"]}
+            input_data = {"image": _IMAGENET_NORM(data["image"])}
 
             detections = self.dedode_detector.detect(
                 input_data, num_keypoints=self.max_num_keypoints
