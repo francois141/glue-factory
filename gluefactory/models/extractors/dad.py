@@ -5,8 +5,11 @@ The code comes from: https://github.com/Parskatt/dad
 import dad
 import torch
 from DeDoDe import dedode_descriptor_B
+from torchvision.transforms import Normalize
 
 from ..base_model import BaseModel
+
+_IMAGENET_NORM = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 
 class DadDetector(BaseModel):
@@ -31,7 +34,7 @@ class DadDetector(BaseModel):
 
     def _forward(self, data):
         with torch.no_grad():
-            input_data = {"image": data["image"]}
+            input_data = {"image": _IMAGENET_NORM(data["image"])}
 
             detections = self.dad_detector.detect(
                 input_data,
