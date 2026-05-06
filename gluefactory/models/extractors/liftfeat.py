@@ -60,10 +60,12 @@ class LiftFeat(BaseModel):
         image = image.detach().cpu().permute(1, 2, 0).contiguous().numpy()
         if image.max() <= 1.0:
             image = image * 255.0
-        return np.clip(image, 0, 255).astype(np.uint8)
+        image = np.clip(image, 0, 255).astype(np.uint8)
+        return image[..., ::-1].copy()
 
     def _forward_single(self, image: torch.Tensor):
-        out = self.model.extract(self._to_uint8_image(image))
+        image_uint8 = self._to_uint8_image(image)
+        out = self.model.extract(image_uint8)
         keypoints = out["keypoints"]
         scores = out["scores"]
         descriptors = out["descriptors"]

@@ -65,15 +65,21 @@ class RDD(BaseModel):
         self.set_initialized()
 
     def _to_model_input(self, image: torch.Tensor) -> torch.Tensor:
+        image = self._to_uint8_image(image)
+        image = torch.tensor(image).permute(2, 0, 1).float() / 255.0
+        return image.unsqueeze(0)
+
+    def _to_uint8_image(self, image: torch.Tensor) -> np.ndarray:
         if image.shape[0] == 1:
             image = image.repeat(3, 1, 1)
         elif image.shape[0] > 3:
             image = image[:3]
 
-        image = image.detach().cpu().float()
+        image = image.detach().cpu().permute(1, 2, 0).contiguous().numpy()
         if image.max() <= 1.0:
             image = image * 255.0
-        return image.unsqueeze(0)
+        image = np.clip(image, 0, 255).astype(np.uint8)
+        return image[..., ::-1].copy()
 
     def _forward_single(self, image: torch.Tensor):
         out = self.model.extract(self._to_model_input(image))[0]
