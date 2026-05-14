@@ -58,6 +58,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         "subpixel_refinement": True,  # perform subpixel refinement after detection
         "force_num_keypoints": False,
         "freeze_lines": False,
+        "build_line_branch": True,  # if False, do not construct distance_field_branch or line_extractor; line forward and line losses are skipped.
         "descriptor_branch": "aliked",  # options are aliked or dedode
         "training": {  # training settings
             "do": False,  # switch to turn off other settings regarding training = "training mode"
@@ -178,7 +179,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             self.descriptor_branch = DeDoDeDetector({})
 
         # Line distance field decoder similar to that in DeepLSD
-        if self.conf.training.do or self.conf.line_detection.do:
+        if (self.conf.training.do or self.conf.line_detection.do) and self.conf.build_line_branch:
             self.distance_field_branch = nn.Sequential(
                 nn.Conv2d(dim, conf.line_df_decoder_channels, kernel_size=3, padding=1),
                 nn.ReLU(),
@@ -193,6 +194,10 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 nn.BatchNorm2d(conf.line_df_decoder_channels),
                 nn.Conv2d(conf.line_df_decoder_channels, 1, kernel_size=1),
                 nn.ReLU(),
+            )
+        elif not self.conf.build_line_branch:
+            logger.warning(
+                "Line branch disabled (build_line_branch=False); distance_field_branch and line_extractor will not be constructed, line forward and line losses will be skipped."
             )
 
         # load pretrained_elements if wanted (for now that only the ALIKED parts of the network)
@@ -247,10 +252,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
                 chkpt_statedict["model"], strict=False
             )  # set to True to check if all keys are present (mlp weights are not present as we removed them above)
 
-        logger.info(f"Load line extractor: {self.conf.line_detection.name}")
-        self.line_extractor = get_model(self.conf.line_detection.name)(
-            self.conf.line_detection.conf
-        )
+        if self.conf.build_line_branch:
+            logger.info(f"Load line extractor: {self.conf.line_detection.name}")
+            self.line_extractor = get_model(self.conf.line_detection.name)(
+                self.conf.line_detection.conf
+            )
 
         if self.conf.training.do and self.conf.training.loss.kp_loss_name == "distill":
             self.dad_distil = DadDistillDetector(
@@ -265,8 +271,9 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
             for param in self.encoder_backbone.parameters():
                 param.requires_grad = False
-            for param in self.distance_field_branch.parameters():
-                param.requires_grad = False
+            if self.conf.build_line_branch:
+                for param in self.distance_field_branch.parameters():
+                    param.requires_grad = False
 
         if self.conf.training.do and "distill" in self.conf.training.loss.kp_loss_name:
             logger.info("Loading Super-point and DAD model for distillation")
@@ -378,7 +385,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )  # B x H x W
 
         # Perform line distance field prediction if in training or line detection activated
-        if self.conf.training.do or self.conf.line_detection.do:
+        if (self.conf.training.do or self.conf.line_detection.do) and self.conf.build_line_branch:
             if self.conf.freeze_lines:
                 self.distance_field_branch.eval()
                 with torch.no_grad():
@@ -428,7 +435,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
 
         ## Line Detection ##
         # Only Perform line detection when NOT in training mode
-        if self.conf.line_detection.do and not self.training:
+        if self.conf.line_detection.do and not self.training and self.conf.build_line_branch:
             # Perform forward pass for line detector, batching handled internally
             line_data = {
                 "line_distancefield": line_distance_field,
@@ -532,16 +539,18 @@ class JointPointLineDetectorDescriptor(BaseModel):
         ].int()
         df_gt_mask_view0 = (
             gt_dict_view0["deeplsd_distance_field"] < self.conf.line_neighborhood
+            if self.conf.build_line_branch
+            else None
         )
         df_gt_mask_view1 = (
             gt_dict_view1["deeplsd_distance_field"] < self.conf.line_neighborhood
-            if self.conf.training.two_view
+            if self.conf.training.two_view and self.conf.build_line_branch
             else None
         )
 
         # Distance field loss. Depends on the pipeline (two-view or one-view)
         # use normalized versions for loss
-        if self.conf.training.loss.use_one_view_df_loss:
+        if self.conf.training.loss.use_one_view_df_loss and self.conf.build_line_branch:
             line_df = prediction_dict["line_distancefield"]
             deeplsd_line_df = gt_dict_view0["deeplsd_distance_field"]
 
@@ -601,7 +610,7 @@ class JointPointLineDetectorDescriptor(BaseModel):
         if self.conf.training.loss.loss_weights.keypoint_dispersity_weight > 0:
             dispers_loss = pred["keypoint_dispersity"].mean(dim=(1, 2))
             losses["one_view_kp_dispersity"] = dispers_loss
-            losses["total"] = (
+            losses["total"] += (
                 self.conf.training.loss.loss_weights.keypoint_dispersity_weight
                 * dispers_loss
             )
@@ -676,7 +685,11 @@ class JointPointLineDetectorDescriptor(BaseModel):
             )
 
         # Two view df consistency loss
-        if self.conf.training.two_view and self.conf.training.loss.use_two_view_df_loss:
+        if (
+            self.conf.training.two_view
+            and self.conf.training.loss.use_two_view_df_loss
+            and self.conf.build_line_branch
+        ):
             # img1 to img0
             warped_df_1_to_0 = self.warp_data(
                 df=prediction_dict["line_distancefield1"],

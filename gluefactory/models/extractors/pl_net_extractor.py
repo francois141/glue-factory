@@ -83,7 +83,7 @@ class PLNet(BaseModel):
         assert C == 3, "PLNet only supports 3-channel RGB images"
         assert batch_size == 1, "PLNet forward_test only supports batch_size=1 currently"
 
-        # special PLNet nortmalization
+        # special PLNet normalization
         # 1) normalize
         if image.max() > 1.0:
             image /= 255.0
