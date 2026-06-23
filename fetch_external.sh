@@ -24,4 +24,9 @@ mkdir -p "${EXTERNAL_DIR}"
 clone_or_update "https://github.com/xtcpete/rdd" "${EXTERNAL_DIR}/rdd"
 clone_or_update "https://github.com/lyp-deeplearning/LiftFeat" "${EXTERNAL_DIR}/LiftFeat"
 
+# Fix rdd to this version
+cd external/rdd; git checkout cf5192612cb9f0f12f15089b7d544be6a2438221 
+
+pip install poselib
+
 echo "Done."

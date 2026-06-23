@@ -30,7 +30,7 @@ else:
 class RDD(BaseModel):
     default_conf = {
         "config_path": str(_RDD_ROOT / "configs" / "default.yaml"),
-        "weights": None,
+        "weights": str(_RDD_ROOT / "weights" / "rdd_cvpr.pth"),
         "detection_threshold": 0.1,
         "max_num_keypoints": 4096,
         "force_num_keypoints": False,
@@ -61,8 +61,18 @@ class RDD(BaseModel):
             if not Path(weights).is_file():
                 raise FileNotFoundError(f"RDD weights not found: {weights}")
 
-        self.model = build_rdd(config, weights)
+        self.model = build_rdd(config)
+        if weights is not None:
+            self.model.load_state_dict(self._load_weights(weights))
         self.set_initialized()
+
+    def _load_weights(self, weights):
+        state = torch.load(weights, map_location="cpu")
+        state = state.get("state_dict", state)
+        return {
+            k.replace("descriptor.backbone.0.encoder.", "descriptor.backbone.0.", 1): v
+            for k, v in state.items()
+        }
 
     def _to_model_input(self, image: torch.Tensor) -> torch.Tensor:
         image = self._to_uint8_image(image)
