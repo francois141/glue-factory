@@ -1,5 +1,5 @@
 """
-Minimal script to load a model and run it on a single image.
+Minimal script to load line models and run them on HPatches images.
 
 Author: Adapted from Paul-Edouard Sarlin (skydes)
 """
@@ -10,9 +10,9 @@ from pathlib import Path
 import cv2
 import matplotlib.pyplot as plt
 import torch
-from omegaconf import OmegaConf
 
 from gluefactory.eval.io import get_model, load_model
+from gluefactory.settings import DATA_PATH
 from gluefactory.visualization.viz2d import plot_images, plot_lines
 
 
@@ -26,6 +26,35 @@ def visualize_img_with_gt(output, input_image, save_path):
 
     plt.savefig(save_path)
     plt.close()
+
+
+def load_rgb_tensor(image_path):
+    img_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise FileNotFoundError(f"Could not read image: {image_path}")
+
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    img_tensor = torch.from_numpy(img_rgb).float() / 255.0
+    img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)
+    return img_rgb, img_tensor
+
+
+def get_hpatches_images(root, num_images, view):
+    root = Path(root)
+    if not root.exists():
+        raise FileNotFoundError(f"HPatches root does not exist: {root}")
+
+    images = []
+    for sequence in sorted(p for p in root.iterdir() if p.is_dir()):
+        image_path = sequence / f"{view}.ppm"
+        if image_path.exists():
+            images.append(image_path)
+        if num_images is not None and len(images) >= num_images:
+            break
+
+    if not images:
+        raise ValueError(f"No HPatches '*{view}.ppm' images found under {root}")
+    return images
 
 
 def get_jpl_model():
@@ -80,23 +109,35 @@ def get_lsd_model():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--image", type=str, default="assets/boat1.png", help="Path to input image"
+        "--hpatches-root",
+        type=Path,
+        default=DATA_PATH / "hpatches-sequences-release",
+        help="Path to the HPatches sequences directory.",
+    )
+    parser.add_argument(
+        "--num-images",
+        type=int,
+        default=5,
+        help="Number of HPatches sequences to visualize. Use -1 for all.",
+    )
+    parser.add_argument(
+        "--view",
+        type=int,
+        default=1,
+        choices=range(1, 7),
+        help="HPatches view index to visualize for each sequence.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("generated_jpl_images/hpatches"),
+        help="Directory where visualizations are written.",
     )
     args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load model
-    print("Loading model...")
-    model = get_lsd_model()
-    model.eval()
-    print("Model loaded.")
-
-    # Load image in RGB (fix: convert from BGR)
-    img_bgr = cv2.imread(args.image, cv2.IMREAD_COLOR)
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-    # Convert to tensor [C, H, W], normalized to [0,1]
-    img_tensor = torch.from_numpy(img_rgb).float() / 255.0
-    img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)  # [1, 3, H, W]
+    num_images = None if args.num_images < 0 else args.num_images
+    image_paths = get_hpatches_images(args.hpatches_root, num_images, args.view)
 
     # Visualize results
     models = [
@@ -108,11 +149,16 @@ if __name__ == "__main__":
     ]
 
     for getter, name in models:
+        print(f"Loading {name}...")
         model = getter()
-        # Run inference
-        with torch.no_grad():
-            output = model({"image": img_tensor})
+        model.eval()
 
-        path = f"generated_jpl_images/example_{name}.pdf"
-        print("Visualization saved to {}".format(path))
-        visualize_img_with_gt(output, img_rgb, path)
+        for image_path in image_paths:
+            img_rgb, img_tensor = load_rgb_tensor(image_path)
+            with torch.no_grad():
+                output = model({"image": img_tensor})
+
+            sequence = image_path.parent.name
+            path = args.output_dir / f"{sequence}_{image_path.stem}_{name}.pdf"
+            visualize_img_with_gt(output, img_rgb, path)
+            print(f"Visualization saved to {path}")
