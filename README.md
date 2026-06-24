@@ -1,4 +1,4 @@
-# UPAL ECCV 24 
+# UPAL ECCV 26
 
 Currently the code is garbage. We are working on a clean release.
 
