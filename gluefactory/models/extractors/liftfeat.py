@@ -11,21 +11,11 @@ import torch
 from ..base_model import BaseModel
 from ..utils.misc import pad_and_stack
 
-_ROOT = Path(__file__).resolve().parents[3]
-_LIFTFEAT_ROOT = _ROOT / "external" / "LiftFeat"
-if str(_LIFTFEAT_ROOT) not in sys.path:
-    sys.path.append(str(_LIFTFEAT_ROOT))
+LIFTFEAT_ROOT = Path(__file__).resolve().parents[3] / "external" / "LiftFeat"
+sys.path.append(str(LIFTFEAT_ROOT))
 
-try:
-    from models.liftfeat_wrapper import LiftFeat as LiftFeatWrapper
-    from models.liftfeat_wrapper import MODEL_PATH
-except Exception as exc:  # pragma: no cover - surfaced in _init
-    LiftFeatWrapper = None
-    MODEL_PATH = _LIFTFEAT_ROOT / "weights" / "LiftFeat.pth"
-    _LIFTFEAT_IMPORT_ERROR = exc
-else:
-    _LIFTFEAT_IMPORT_ERROR = None
-
+from models.liftfeat_wrapper import LiftFeat as LiftFeatWrapper
+from models.liftfeat_wrapper import MODEL_PATH
 
 class LiftFeat(BaseModel):
     default_conf = {
@@ -38,12 +28,7 @@ class LiftFeat(BaseModel):
     required_data_keys = ["image"]
 
     def _init(self, conf):
-        if LiftFeatWrapper is None:
-            raise ImportError(
-                "Could not import LiftFeat from external/LiftFeat. "
-                "Make sure the bundled dependency tree is present."
-            ) from _LIFTFEAT_IMPORT_ERROR
-
+        print(conf.weights)
         self.model = LiftFeatWrapper(
             weight=conf.weights,
             detect_threshold=conf.detection_threshold,
@@ -86,9 +71,6 @@ class LiftFeat(BaseModel):
 
         for i in range(image.shape[0]):
             img = image[i]
-            if "image_size" in data:
-                w, h = data["image_size"][i]
-                img = img[:, : int(h), : int(w)]
             kpts, sc, desc = self._forward_single(img)
             keypoints.append(kpts)
             scores.append(sc)

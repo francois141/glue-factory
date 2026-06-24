@@ -1,0 +1,31 @@
+model:
+  name: two_view_pipeline
+  extractor:
+    name: lines.linea
+    linea_variant: n  # n, s, m, or l
+    input_size: 640
+    score_threshold: 0.2 # Use 0.2 for rdnim_lines otherwise it sucks
+    min_length: 15
+    max_num_lines: null
+    force_num_lines: false
+    save_line_images: true
+    line_image_path: image_line.jpg
+    # linea_root: null  # path to LINEA repo; if unset, uses external/LINEA
+  matcher:
+    name: matchers.line_matcher
+    line_dist: orth
+benchmarks:
+    megadepth1500:
+        data:
+            preprocessing:
+                side: long
+                resize: 1600
+        eval:
+            estimator: opencv
+            ransac_th: 0.5
+    hpatches_lines:
+        data:
+            preprocessing:
+                side: long
+                resize: 800
+                
