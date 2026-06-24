@@ -1,3 +1,7 @@
+# UPAL ECCV 24 
+
+Currently the code is garbage. We are working on a clean release.
+
 # 🚀 Running JPL — Step-by-Step Guide
 
 This guide explains how to install, configure, and run JPL within the **gluefactory** environment.  
