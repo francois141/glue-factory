@@ -47,4 +47,4 @@ benchmarks:
                 max_iterations: 2000000
         model:
             extractor:
-                max_num_keypoints: 1024
+                max_num_keypoints: 4096

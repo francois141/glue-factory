@@ -16,7 +16,10 @@ benchmarks:
                 resize: 1600
         eval:
             estimator: poselib
-            ransac_th: 0.5
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
     scannet1500:
         data:
             preprocessing:
@@ -24,14 +27,24 @@ benchmarks:
                 resize: 1600
         eval:
             estimator: poselib
-            ransac_th: 0.5
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
         model:
             extractor:
-                top_k: 2048
+                max_num_keypoints: 2048
     hpatches:
+        data:
+            preprocessing:
+                side: long
+                resize: 800
         eval:
             estimator: poselib
-            ransac_th: 0.5
+            ransac_th: -1
+            options:
+                min_iterations: 2000
+                max_iterations: 2000000
         model:
             extractor:
-                top_k: 1024
+                max_num_keypoints: 1024  # overwrite config above
