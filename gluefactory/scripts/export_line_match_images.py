@@ -15,12 +15,9 @@ from gluefactory.datasets.base_dataset import collate
 from gluefactory.datasets.homographies_deeplsd import warp_lines
 from gluefactory.eval import get_benchmark
 from gluefactory.models.cache_loader import CacheLoader
-from gluefactory.models.lines.line_distances import (
-    get_orth_line_dist_torch,
-    get_structural_line_dist,
-)
+from gluefactory.models.lines.line_distances import get_orth_line_dist_torch
 from gluefactory.settings import EVAL_PATH
-from gluefactory.visualization.viz2d import plot_color_line_matches, plot_images
+from gluefactory.visualization.viz2d import plot_images
 
 
 def to_numpy(x):
@@ -57,31 +54,7 @@ def get_line_inliers_and_error(lines0, lines1, H_0to1, threshold):
     )
     dist = torch.diag(dist).detach().cpu().numpy()
     inliers = dist < threshold
-    mean_error = 0.0 if not np.any(inliers) else float(dist[inliers].mean())
-    return inliers, mean_error
-
-
-def get_endpoint_inliers_and_error(lines0, lines1, H_0to1, threshold):
-    warped_lines0 = warp_lines(lines0, H_0to1)
-    warped_lines1 = warp_lines(lines1, np.linalg.inv(H_0to1))
-    dist0to1 = torch.diag(
-        get_structural_line_dist(
-            torch.as_tensor(warped_lines0, dtype=torch.float32),
-            torch.as_tensor(lines1, dtype=torch.float32),
-        )
-    )
-    dist1to0 = torch.diag(
-        get_structural_line_dist(
-            torch.as_tensor(lines0, dtype=torch.float32),
-            torch.as_tensor(warped_lines1, dtype=torch.float32),
-        )
-    )
-    dist0to1 = dist0to1.detach().cpu().numpy()
-    dist1to0 = dist1to0.detach().cpu().numpy()
-    dist = (dist0to1 + dist1to0) / 2
-    inliers = dist < threshold
-    mean_error = 0.0 if not np.any(inliers) else float(dist[inliers].mean())
-    return inliers, mean_error
+    return inliers
 
 
 def should_flip_lines(lines, image, convention):
@@ -110,7 +83,7 @@ def lines_to_plot_coords(lines, image, convention):
     return lines
 
 
-def plot_green_red_line_matches(
+def plot_red_black_line_matches(
     lines0,
     lines1,
     correct,
@@ -122,11 +95,11 @@ def plot_green_red_line_matches(
     fig = plt.gcf()
     axes = fig.axes[:2]
     if correct is None:
-        colors = np.tile(np.array([[0.0, 0.85, 0.0]]), (len(lines0), 1))
+        colors = np.tile(np.array([[0.0, 0.0, 0.0]]), (len(lines0), 1))
     else:
         colors = np.where(
             correct[:, None],
-            np.array([[0.0, 0.85, 0.0]]),
+            np.array([[0.0, 0.0, 0.0]]),
             np.array([[1.0, 0.0, 0.0]]),
         )
 
@@ -192,47 +165,31 @@ def export_one(loader, cache_loader, idx, threshold, out_dir, args):
 
     if len(matched0) == 0:
         correct = np.zeros(0, dtype=bool) if "H_0to1" in data else None
-        mean_error = 0.0
     elif "H_0to1" in data:
         H_0to1 = to_numpy(data["H_0to1"][0])
-        if args.correctness == "endpoint":
-            correct, mean_error = get_endpoint_inliers_and_error(
-                matched0, matched1, H_0to1, threshold
-            )
-        else:
-            correct, mean_error = get_line_inliers_and_error(
-                matched0, matched1, H_0to1, threshold
-            )
+        correct = get_line_inliers_and_error(matched0, matched1, H_0to1, threshold)
         correct = np.asarray(correct, dtype=bool)
     else:
         correct = None
-        mean_error = None
 
     plot_images([img0, img1], titles=["", ""])
     plot_lines0 = lines_to_plot_coords(matched0, img0, args.line_convention)
     plot_lines1 = lines_to_plot_coords(matched1, img1, args.line_convention)
 
-    if args.plot_style == "builtin":
-        plot_color_line_matches(
-            [plot_lines0, plot_lines1],
-            correct_matches=correct,
-            lw=args.line_width,
-        )
-    else:
-        plot_green_red_line_matches(
-            plot_lines0,
-            plot_lines1,
-            correct,
-            lw=args.line_width,
-            alpha=args.alpha,
-            endpoint_size=args.endpoint_size,
-            draw_connectors=not args.no_connectors,
-        )
+    plot_red_black_line_matches(
+        plot_lines0,
+        plot_lines1,
+        correct,
+        lw=args.line_width,
+        alpha=args.alpha,
+        endpoint_size=args.endpoint_size,
+        draw_connectors=not args.no_connectors,
+    )
 
     n_good = int(correct.sum()) if correct is not None else None
     n_total = len(matched0)
 
-    out = out_dir / f"line_matches_idx{idx:04d}_{args.plot_style}.png"
+    out = out_dir / f"line_matches_idx{idx:04d}.png"
     plt.savefig(out, dpi=args.dpi, bbox_inches="tight")
     plt.close()
     return out, n_good, n_total
@@ -272,13 +229,6 @@ def main():
     )
     parser.add_argument("--out_dir", default=None)
     parser.add_argument("--dpi", type=int, default=200)
-    parser.add_argument("--plot_style", choices=["builtin", "green_red"], default="builtin")
-    parser.add_argument(
-        "--correctness",
-        choices=["endpoint", "orthogonal"],
-        default="endpoint",
-        help="How to mark line matches correct when H_0to1 is available.",
-    )
     parser.add_argument(
         "--line_convention",
         choices=["auto", "xy", "ij"],
@@ -320,7 +270,10 @@ def main():
     if not has_correctness:
         print(f"Exported {total_matches} line matches; no homography correctness available.")
     else:
-        print(f"Correct line matches: {total_good}/{total_matches} @ {args.threshold}px")
+        print(
+            f"Orthogonal-distance inliers: {total_good}/{total_matches} "
+            f"@ {args.threshold}px"
+        )
     if last_out is not None:
         print(f"Last image: {last_out}")
 
