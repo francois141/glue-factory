@@ -1,9 +1,28 @@
+"""Export side-by-side line-match figures from cached eval predictions.
+
+Usage:
+    python -m gluefactory.scripts.export_line_match_images --exp <run_name> \
+        [--benchmark hpatches] [--threshold 3.0] [--indices 0,3,10-15] [--no_connectors]
+
+How it works:
+    - Loads cached per-sample predictions from
+      outputs/results/<benchmark>/<exp>/predictions.h5 via CacheLoader
+      (reads lines0/1 and the line_matches0/1 index mapping).
+    - Pairs matched segments (line_matches0[i] -> lines1) into (matched0, matched1).
+    - If the dataset has a ground-truth homography H_0to1, labels each match by
+      orthogonal line distance after warping < threshold and colors correct black /
+      wrong red; without H_0to1 all matches are drawn black.
+    - Saves one PNG per pair via plot_images + plot_red_black_line_matches.
+
+Compatible benchmarks (must export lines0/1 + line_matches0/1):
+    homography (H_0to1): hpatches, hpatches_extended, hpatches_lines, rdnim_lines
+Line correctness needs a homography, so pose benchmarks (megadepth1500, scannet1500)
+are unsupported -- they export only point matches; the script exits with guidance.
+"""
+
 import argparse
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.lines
 import matplotlib.patches
 import matplotlib.pyplot as plt
@@ -19,6 +38,11 @@ from gluefactory.models.lines.line_distances import get_orth_line_dist_torch
 from gluefactory.settings import EVAL_PATH
 from gluefactory.visualization.viz2d import plot_images
 
+# Non-interactive backend for headless rendering; safe to switch before any figure.
+plt.switch_backend("Agg")
+
+REQUIRED_LINE_KEYS = ["lines0", "lines1", "line_matches0", "line_matches1"]
+
 
 def to_numpy(x):
     if isinstance(x, torch.Tensor):
@@ -26,8 +50,24 @@ def to_numpy(x):
     return np.asarray(x)
 
 
+def line_keys_error(benchmark, missing):
+    """Friendly error when a benchmark did not export line predictions."""
+    return SystemExit(
+        f"Benchmark '{benchmark}' exported no line predictions (missing {missing}).\n"
+        "Use a benchmark that exports line matches (homography / H_0to1):\n"
+        "  hpatches, hpatches_extended, hpatches_lines, rdnim_lines\n"
+        "Pose benchmarks (megadepth1500, scannet1500) export only point matches -- "
+        "use export_point_match_images.py for those."
+    )
+
+
 def get_pair_indices(lines0, lines1, pred):
-    """Support both mapping-style and paired-index line match tensors."""
+    """Matched index pairs from line matches.
+
+    Line matchers emit line_matches0/line_matches1 as *paired* index arrays (equal
+    length == number of matches), unlike point matches0 which is a per-line mapping;
+    we support both (mapping detected by len(line_matches0) == len(lines0)).
+    """
     m0 = to_numpy(pred["line_matches0"][0]).astype(int)
     m1 = to_numpy(pred["line_matches1"][0]).astype(int)
 
@@ -37,12 +77,7 @@ def get_pair_indices(lines0, lines1, pred):
     else:
         idx0, idx1 = m0, m1
 
-    valid = (
-        (idx0 >= 0)
-        & (idx0 < len(lines0))
-        & (idx1 >= 0)
-        & (idx1 < len(lines1))
-    )
+    valid = (idx0 >= 0) & (idx0 < len(lines0)) & (idx1 >= 0) & (idx1 < len(lines1))
     return idx0[valid], idx1[valid]
 
 
@@ -150,9 +185,11 @@ def export_one(loader, cache_loader, idx, threshold, out_dir, args):
     data = collate([loader.dataset[idx]])
     pred = cache_loader(data)
 
-    for key in ["lines0", "lines1", "line_matches0", "line_matches1"]:
-        if key not in pred:
-            raise KeyError(f"Prediction file does not contain required key: {key}")
+    # Guard once, before any rendering: a benchmark with no line predictions
+    # (e.g. a pose benchmark) fails on the first sample with clear guidance.
+    missing = [k for k in REQUIRED_LINE_KEYS if k not in pred]
+    if missing:
+        raise line_keys_error(args.benchmark, missing)
 
     img0 = data["view0"]["image"][0]
     img1 = data["view1"]["image"][0]
@@ -217,7 +254,7 @@ def parse_indices(args, dataset_size):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--benchmark", default="megadepth1500")
+    parser.add_argument("--benchmark", default="hpatches")
     parser.add_argument("--exp", required=True)
     parser.add_argument("--threshold", type=float, default=3.0)
     parser.add_argument("--start", type=int, default=0)
@@ -253,6 +290,10 @@ def main():
     indices = parse_indices(args, len(loader.dataset))
     cache_loader = CacheLoader({"path": str(pred_file), "add_data_path": False})
 
+    if not indices:
+        print("No valid indices selected; nothing to export.")
+        return
+
     total_good, total_matches = 0, 0
     has_correctness = True
     last_out = None
@@ -268,7 +309,10 @@ def main():
 
     print(f"Wrote {len(indices)} images to {out_dir}")
     if not has_correctness:
-        print(f"Exported {total_matches} line matches; no homography correctness available.")
+        print(
+            f"Exported {total_matches} line matches; "
+            "no homography correctness available."
+        )
     else:
         print(
             f"Orthogonal-distance inliers: {total_good}/{total_matches} "
