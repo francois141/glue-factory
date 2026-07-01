@@ -1,67 +1,68 @@
 """Export side-by-side point-match figures from cached eval predictions.
 
-Usage:
-    python -m gluefactory.scripts.export_point_match_images --exp <run_name> \
-        [--benchmark hpatches] [--threshold 3.0] [--epi_threshold 5e-4] \
-        [--indices 0,3,10-15] [--no_connectors]
+Reads a benchmark's cached predictions.h5 (written by gluefactory.eval.*) and draws,
+per image pair, the matched keypoints colored by correctness against the ground truth.
+Outputs one PNG per sample under outputs/results/<benchmark>/<exp>/point_match_images/
+(or --out_dir).
 
-How it works:
-    - Loads cached per-sample predictions from
-      outputs/results/<benchmark>/<exp>/predictions.h5 via CacheLoader
-      (reads keypoints0/1 and the matches0 index mapping).
-    - Pairs matched keypoints (matches0[i] -> kpts1) into (matched0, matched1).
-    - Flags each match correct/incorrect and colors it black/red using whichever
-      ground truth the dataset provides:
-        * homography H_0to1  -> symmetric reprojection error < threshold (pixels)
-        * relative pose T_0to1 + intrinsics -> symmetric epipolar distance
-          < epi_threshold (normalized coords, as in eval.utils.eval_matches_epipolar)
-      With neither available all matches are drawn black.
-    - Renders the pair with plot_images + plot_matches, one PNG per sample.
+Usage:
+    python -m gluefactory.scripts.export_point_match_images --exp <run> [options]
+
+    # first 100 hpatches_extended pairs, aspect-preserving 800px long side:
+    ... --benchmark hpatches_extended --exp <run> --num 100 --side long --resize 800
+    # 100 reproducible random samples (SAME seed as the prediction run):
+    ... --exp <run> --random 100 --seed 0
+    # declutter: only the 300 most-salient matches, at native resolution:
+    ... --exp <run> --no_resize --max_matches 300
+
+Selecting samples (predictions.h5 is keyed by sample name):
+    --indices 0,3,10-15    explicit indices / ranges
+    --start / --num        a contiguous slice (default: all samples)
+    --random N --seed S    N seeded-random indices. IMPORTANT: use the SAME
+                           --random/--seed/--benchmark as the run that produced the
+                           predictions, else the sample names are not found.
+
+Image size (display + coord scaling; predictions store original-image coords):
+    (default)              the benchmark's own resize
+    --side long --resize 800   aspect-preserving, long side = 800
+    --no_resize            original resolution
+
+Coloring (vs ground truth): yellow = correct, red = wrong, black = no ground truth.
+    * homography H_0to1  -> symmetric reprojection error < --threshold (px)
+    * relative pose T_0to1 + intrinsics -> epipolar distance < --epi_threshold
+    --max_matches N        draw only the top-N matches by keypoint detection score
+                           (declutter); the inlier summary then counts only those N.
 
 Compatible benchmarks (must export keypoints0/1 + matches0):
-    homography (H_0to1):     hpatches, hpatches_extended
-    relative pose (T_0to1):  megadepth1500, megadepth1500_extended, scannet1500
+    homography (H_0to1):    hpatches, hpatches_extended
+    relative pose (T_0to1): megadepth1500, megadepth1500_extended, scannet1500
 """
 
 import argparse
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from tqdm import tqdm
 
-from gluefactory.datasets.base_dataset import collate
-from gluefactory.eval import get_benchmark
 from gluefactory.eval.utils import get_matches_scores
 from gluefactory.geometry.epipolar import generalized_epi_dist
 from gluefactory.geometry.homography import sym_homography_error
 from gluefactory.models.cache_loader import CacheLoader
-from gluefactory.settings import EVAL_PATH
+from gluefactory.scripts._match_export_common import (
+    add_common_args,
+    build_loader,
+    load_pred,
+    parse_indices,
+    resolve_io,
+    to_numpy,
+)
 from gluefactory.visualization.viz2d import plot_images, plot_matches
 
 # Non-interactive backend for headless rendering; safe to switch before any figure.
 plt.switch_backend("Agg")
 
 REQUIRED_POINT_KEYS = ["keypoints0", "keypoints1", "matches0"]
-
-
-def to_numpy(x):
-    if isinstance(x, torch.Tensor):
-        return x.detach().cpu().numpy()
-    return np.asarray(x)
-
-
-def point_keys_error(benchmark, missing):
-    """Friendly error when a benchmark did not export point predictions."""
-    return SystemExit(
-        f"Benchmark '{benchmark}' exported no point predictions (missing {missing}).\n"
-        "Use a benchmark that exports point matches (keypoints0/1 + matches0):\n"
-        "  homography (H_0to1): hpatches, hpatches_extended\n"
-        "  relative pose (T_0to1): megadepth1500, megadepth1500_extended, scannet1500\n"
-        "Line benchmarks (hpatches_lines, rdnim_lines) export only line matches -- "
-        "use export_line_match_images.py for those."
-    )
 
 
 def get_point_inliers(kpts0, kpts1, H_0to1, threshold):
@@ -117,14 +118,9 @@ def compute_correctness(matched0, matched1, data, args):
 
 
 def export_one(loader, cache_loader, idx, out_dir, args):
-    data = collate([loader.dataset[idx]])
-    pred = cache_loader(data)
-
-    # Guard once, before any rendering: a benchmark with no point predictions
-    # (e.g. a line-only benchmark) fails on the first sample with clear guidance.
-    missing = [k for k in REQUIRED_POINT_KEYS if k not in pred]
-    if missing:
-        raise point_keys_error(args.benchmark, missing)
+    data, pred = load_pred(
+        loader, cache_loader, idx, REQUIRED_POINT_KEYS, "point", args.benchmark
+    )
 
     img0 = data["view0"]["image"][0]
     img1 = data["view1"]["image"][0]
@@ -132,17 +128,27 @@ def export_one(loader, cache_loader, idx, out_dir, args):
     kpts1 = to_numpy(pred["keypoints1"][0])
     m0 = to_numpy(pred["matches0"][0]).astype(int)
     matched0, matched1, _ = get_matches_scores(kpts0, kpts1, m0, np.zeros(len(m0)))
+    if args.max_matches is not None and len(matched0) > args.max_matches:
+        # nn_point_line's matching_scores0 is binary (matched/not), so rank by the
+        # keypoint detection score -- the only graded point confidence available.
+        ks0 = (
+            to_numpy(pred["keypoint_scores0"][0])[m0 > -1]
+            if "keypoint_scores0" in pred
+            else np.zeros(len(matched0))
+        )
+        keep = np.argsort(ks0)[::-1][: args.max_matches]
+        matched0, matched1 = matched0[keep], matched1[keep]
 
     correct, metric = compute_correctness(matched0, matched1, data, args)
 
     plot_images([img0, img1], titles=["", ""])
     colors = (
-        [[0.0, 0.0, 0.0]] * len(matched0)
+        [[0.0, 0.0, 0.0]] * len(matched0)  # no ground truth -> neutral black
         if correct is None
         else np.where(
             correct[:, None],
-            np.array([[0.0, 0.0, 0.0]]),
-            np.array([[1.0, 0.0, 0.0]]),
+            np.array([[1.0, 1.0, 0.0]]),  # correct -> yellow
+            np.array([[1.0, 0.0, 0.0]]),  # wrong -> red
         ).tolist()
     )
     plot_matches(
@@ -163,66 +169,31 @@ def export_one(loader, cache_loader, idx, out_dir, args):
     return out, n_good, n_total, metric
 
 
-def parse_indices(args, dataset_size):
-    if args.indices:
-        indices = []
-        for chunk in args.indices.split(","):
-            if "-" in chunk:
-                start, end = map(int, chunk.split("-", 1))
-                indices.extend(range(start, end + 1))
-            else:
-                indices.append(int(chunk))
-    else:
-        stop = (
-            dataset_size
-            if args.num is None
-            else min(dataset_size, args.start + args.num)
-        )
-        indices = list(range(args.start, stop))
-
-    return [i for i in indices if 0 <= i < dataset_size]
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--benchmark", default="megadepth1500")
-    parser.add_argument("--exp", required=True)
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=3.0,
-        help="Homography inlier threshold in pixels (homography benchmarks).",
-    )
+    add_common_args(parser, default_benchmark="megadepth1500")
     parser.add_argument(
         "--epi_threshold",
         type=float,
         default=5e-4,
         help="Epipolar inlier threshold in normalized coords (pose benchmarks).",
     )
-    parser.add_argument("--start", type=int, default=0)
-    parser.add_argument("--num", type=int, default=None)
     parser.add_argument(
-        "--indices",
+        "--max_matches",
+        type=int,
         default=None,
-        help="Comma/range list, e.g. '0,3,10-15'. Overrides --start/--num.",
+        help="Draw only the top-N matches, ranked by keypoint detection score "
+        "(declutter; nn_point_line has no graded point-match score). The inlier "
+        "summary then counts only the kept N.",
     )
-    parser.add_argument("--out_dir", default=None)
-    parser.add_argument("--dpi", type=int, default=200)
     parser.add_argument("--line_width", type=float, default=1.0)
     parser.add_argument("--point_size", type=float, default=3.0)
     parser.add_argument("--alpha", type=float, default=0.85)
     parser.add_argument("--no_connectors", action="store_true")
     args = parser.parse_args()
 
-    exp_dir = Path(EVAL_PATH) / args.benchmark / args.exp
-    pred_file = exp_dir / "predictions.h5"
-    if not pred_file.exists():
-        raise FileNotFoundError(f"Missing predictions file: {pred_file}")
-
-    out_dir = Path(args.out_dir) if args.out_dir else exp_dir / "point_match_images"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    loader = get_benchmark(args.benchmark).get_dataloader()
+    pred_file, out_dir = resolve_io(args, "point_match_images")
+    loader = build_loader(args)
     indices = parse_indices(args, len(loader.dataset))
     cache_loader = CacheLoader({"path": str(pred_file), "add_data_path": False})
 
